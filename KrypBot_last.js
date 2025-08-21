@@ -21,7 +21,7 @@
     // 📝 ADVANCED LOGGING SYSTEM
     let debugLogs = [];
     const MAX_LOGS = 1000; // Keep last 1000 log entries
-    
+
     function logToFile(level, message, data = null) {
         const timestamp = new Date().toISOString();
         const logEntry = {
@@ -32,14 +32,14 @@
             url: window.location.href,
             fen: fen || 'unknown'
         };
-        
+
         debugLogs.push(logEntry);
-        
+
         // Keep only last MAX_LOGS entries
         if (debugLogs.length > MAX_LOGS) {
             debugLogs = debugLogs.slice(-MAX_LOGS);
         }
-        
+
         // Also log to console with enhanced formatting
         const prefix = `🔍 [${level.toUpperCase()}] ${timestamp}`;
         if (data) {
@@ -48,7 +48,7 @@
             console.log(`${prefix} ${message}`);
         }
     }
-    
+
     function downloadLogs() {
         const logContent = debugLogs.map(log => {
             let line = `[${log.timestamp}] ${log.level.toUpperCase()}: ${log.message}`;
@@ -59,7 +59,7 @@
             line += `\nFEN: ${log.fen}`;
             return line + '\n---\n';
         }).join('\n');
-        
+
         const blob = new Blob([logContent], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -69,29 +69,29 @@
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
+
         logToFile('INFO', '📥 Debug logs downloaded successfully');
     }
-    
+
     // Override console.log to capture everything
     const originalLog = console.log;
-    console.log = function(...args) {
+    console.log = function (...args) {
         originalLog.apply(console, args);
         logToFile('INFO', args.join(' '), args.length > 1 ? args : null);
     };
-    
+
     const originalError = console.error;
-    console.error = function(...args) {
+    console.error = function (...args) {
         originalError.apply(console, args);
         logToFile('ERROR', args.join(' '), args.length > 1 ? args : null);
     };
-    
+
     const originalWarn = console.warn;
-    console.warn = function(...args) {
+    console.warn = function (...args) {
         originalWarn.apply(console, args);
         logToFile('WARN', args.join(' '), args.length > 1 ? args : null);
     };
-    
+
     logToFile('SYSTEM', '🚀 Chess Bot Debug Logging System Initialized');
 
     // YOUR OWN API URL
@@ -406,7 +406,7 @@
                                 logToFile('API_REQUEST', `🎯 Requesting best move with engine: ${selectedEngine}, depth: ${chessBot.power}, elo: ${chessBot.elo}`);
                                 logToFile('API_REQUEST', `📋 Sending position FEN: ${fen.substring(0, 50)}...`);
                                 logToFile('API_REQUEST', `🌐 API URL: ${YOUR_API_URL}/api/v1/best-move`);
-                                
+
                                 const requestStartTime = performance.now();
                                 const data = await fetch(`${YOUR_API_URL}/api/v1/best-move`, {
                                     method: "POST",
@@ -424,7 +424,7 @@
                                 if (data.ok) {
                                     const requestEndTime = performance.now();
                                     const requestDuration = ((requestEndTime - requestStartTime) / 1000).toFixed(2);
-                                    
+
                                     const resp = await data.json();
                                     continuation = resp.best_move;
 
