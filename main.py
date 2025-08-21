@@ -34,13 +34,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for browser extensions
+# Enable CORS for browser extensions - Updated for better compatibility
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=False,  # Changed to False for broader compatibility
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Request/Response Models
@@ -193,6 +194,11 @@ async def shutdown_event():
             except:
                 pass
 
+@app.options("/{full_path:path}")
+async def options_handler(full_path: str):
+    """Handle preflight CORS requests"""
+    return {}
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
     """Serve a simple dashboard"""
@@ -294,6 +300,7 @@ async def read_root():
 @app.post("/api/v1/best-move", response_model=MoveResponse)
 async def get_best_move(request: MoveRequest):
     """Get the best move for a given position"""
+    logger.info(f"🎯 Best move request: engine={request.engine}, depth={request.depth}, fen={request.fen[:20]}...")
     start_time = time.time()
     
     try:
