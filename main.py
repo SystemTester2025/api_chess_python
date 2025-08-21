@@ -99,27 +99,14 @@ STOCKFISH_PATHS = [
 ]
 
 async def initialize_engines():
-    """Initialize available chess engines with Stockfish.js priority"""
+    """Initialize available chess engines with NATIVE Stockfish priority"""
     global engines
     
     stockfish_initialized = False
     
-    # First, try to initialize Stockfish.js if available
-    if stockfish_js_engine is not None:
-        logger.info("🚀 Initializing Stockfish.js...")
-        try:
-            stockfish_js_ready = await stockfish_js_engine.initialize()
-            
-            if stockfish_js_ready:
-                engines["stockfish"] = "stockfish_js"
-                logger.info("✅ Stockfish.js engine ready!")
-                stockfish_initialized = True
-            else:
-                logger.warning("⚠️ Stockfish.js initialization failed")
-        except Exception as e:
-            logger.error(f"❌ Stockfish.js initialization error: {e}")
-    else:
-        logger.warning("⚠️ Stockfish.js module not available")
+    # 🚨 EMERGENCY: DISABLE Stockfish.js - it's using backup engine!
+    logger.error("🚨 EMERGENCY: Stockfish.js DISABLED - was using backup engine!")
+    logger.error("🔧 Forcing NATIVE Stockfish only for real analysis")
     
     if not stockfish_initialized:
         # Fallback 1: Try native Stockfish
@@ -808,12 +795,12 @@ async def analyze_with_stockfish(board: chess.Board, depth: int, time_limit: flo
     if "stockfish" not in engines and "stockfish_backup" not in engines:
         raise Exception("No Stockfish engine available")
     
-    logger.error("🚨 EMERGENCY MODE: Bypassing online APIs - using local Stockfish ONLY")
+    logger.error("🚨 EMERGENCY MODE: Using NATIVE Stockfish ONLY - no online APIs!")
     logger.error(f"🔧 Engines available: {list(engines.keys())}")
     logger.error(f"🔧 Stockfish engine type: {type(engines.get('stockfish', 'NOT_FOUND'))}")
     
-    # 🚨 EMERGENCY: Try local Stockfish FIRST (skip online APIs completely)
-    if "stockfish" in engines and engines["stockfish"] != "unavailable" and hasattr(engines["stockfish"], 'analyse'):
+    # 🚨 EMERGENCY: Try NATIVE Stockfish FIRST (skip online APIs completely)
+    if "stockfish" in engines and hasattr(engines["stockfish"], 'analyse'):
         try:
             logger.error("🚨 EMERGENCY: Using local chess.engine Stockfish...")
             engine = engines["stockfish"]
