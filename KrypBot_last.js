@@ -16,7 +16,7 @@
     let interval, show_opponent = false, can_interval = true, main_interval = true, show_evaluation = true,
         auto_move, current_color = '#000000', fen, checkfen, cp = 0, best_cp = 0, hint = true, username, Messages = [], msgLen = 0;  // Start with hints enabled
     let chessBot = { elo: 3200, power: 15, status: 1, nature: 1, type: 1, fen: 0, time: 0.3, human_simulation: false, min_time: 0.5, max_time: 3.0 };  // Start with bot enabled
-    let selectedEngine = 'stockfish'; // Engine selection
+    let selectedEngine = 'ensemble'; // Try ensemble engine for better moves
 
     // YOUR OWN API URL
     const YOUR_API_URL = 'https://api-chess-python.onrender.com';
@@ -291,23 +291,23 @@
                                     })
                                 });
 
-                            if (data.ok) {
-                                const resp = await data.json();
-                                
-                                // 🔍 DETAILED EVALUATION RESPONSE LOGGING
-                                console.log('📤 EVALUATION REQUEST:');
-                                console.log('   📝 FEN:', fen.substring(0, 30) + '...');
-                                console.log('   👀 Perspective:', my_peice);
-                                console.log('📥 EVALUATION RESPONSE:');
-                                console.log('   📊 Evaluation:', resp.evaluation);
-                                console.log('   🎯 Winning Chances:', resp.winning_chances + '%');
-                                console.log('   🧠 Full Response:', resp);
-                                
-                                best_cp = resp.evaluation?.cp || 0;
-                            } else {
-                                console.log('⚠️ Evaluation API error:', data.status);
-                                console.log('⚠️ Response body:', await data.text());
-                            }
+                                if (data.ok) {
+                                    const resp = await data.json();
+
+                                    // 🔍 DETAILED EVALUATION RESPONSE LOGGING
+                                    console.log('📤 EVALUATION REQUEST:');
+                                    console.log('   📝 FEN:', fen.substring(0, 30) + '...');
+                                    console.log('   👀 Perspective:', my_peice);
+                                    console.log('📥 EVALUATION RESPONSE:');
+                                    console.log('   📊 Evaluation:', resp.evaluation);
+                                    console.log('   🎯 Winning Chances:', resp.winning_chances + '%');
+                                    console.log('   🧠 Full Response:', resp);
+
+                                    best_cp = resp.evaluation?.cp || 0;
+                                } else {
+                                    console.log('⚠️ Evaluation API error:', data.status);
+                                    console.log('⚠️ Response body:', await data.text());
+                                }
                             }
                             catch (e) {
                                 console.log('⚠️ Evaluation fetch failed:', e)
@@ -341,7 +341,7 @@
                                 if (data.ok) {
                                     const resp = await data.json();
                                     continuation = resp.best_move;
-                                    
+
                                     // 🔍 DETAILED API RESPONSE LOGGING
                                     console.log('📤 REQUEST SENT TO API:');
                                     console.log('   🌐 URL:', `${YOUR_API_URL}/api/v1/best-move`);
@@ -349,7 +349,7 @@
                                     console.log('   🎯 Engine:', selectedEngine);
                                     console.log('   📊 Depth:', chessBot.power);
                                     console.log('   🎮 ELO:', chessBot.elo);
-                                    
+
                                     console.log('📥 FULL API RESPONSE:');
                                     console.log('   🎯 Best Move:', resp.best_move);
                                     console.log('   🔧 Engine Used:', resp.engine_used);
@@ -357,7 +357,7 @@
                                     console.log('   ⏱️ Analysis Time:', resp.analysis_time + 's');
                                     console.log('   📈 Depth Reached:', resp.depth_reached);
                                     console.log('   🧠 Full Response:', resp);
-                                    
+
                                     console.log("🎯 Best move received:", continuation);
 
                                     if (continuation) {
@@ -403,7 +403,7 @@
 
                                 if (data.ok) {
                                     const resp = await data.json();
-                                    
+
                                     // 🔍 DETAILED OPPONENT EVALUATION LOGGING
                                     console.log('📤 OPPONENT EVALUATION REQUEST:');
                                     console.log('   📝 FEN:', fen.substring(0, 30) + '...');
@@ -412,7 +412,7 @@
                                     console.log('   📊 Evaluation:', resp.evaluation);
                                     console.log('   🎯 Winning Chances:', resp.winning_chances + '%');
                                     console.log('   🧠 Full Response:', resp);
-                                    
+
                                     cp = resp.evaluation?.cp || 0;
                                     $('.myanalysis').remove();
 
@@ -526,7 +526,7 @@
     <p style="font-size: 20px; font-weight: 600; letter-spacing: 0.04em;">Chess Engine</p>
     <select id="engineSelect" style="padding: 8px; border-radius: 4px; background: #2a2a2a; color: #f0e68c; border: 1px solid #444;">
       <option value="stockfish">Stockfish (~3200)</option>
-      <option value="ensemble">Multi-Engine</option>
+      <option value="ensemble" selected>Multi-Engine (Best)</option>
       <option value="random">Random (Test)</option>
     </select>
   </section>
