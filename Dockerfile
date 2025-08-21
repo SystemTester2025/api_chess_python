@@ -5,7 +5,11 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y \
     stockfish \
     curl \
+    wget \
     && rm -rf /var/lib/apt/lists/*
+
+# Verify Stockfish installation
+RUN which stockfish && stockfish --version
 
 # Set working directory
 WORKDIR /app

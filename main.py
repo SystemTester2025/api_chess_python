@@ -75,29 +75,55 @@ class EnsembleResponse(BaseModel):
 
 # Global variables for engine management
 engines = {}
-engine_paths = {
-    "stockfish": "/usr/bin/stockfish"  # Default path on Render
-}
+
+# Get Stockfish path from environment or use defaults
+STOCKFISH_PATH = os.environ.get("STOCKFISH_PATH", "/usr/bin/stockfish")
+
+# Alternative Stockfish paths to try
+STOCKFISH_PATHS = [
+    STOCKFISH_PATH,
+    "/usr/bin/stockfish",
+    "/usr/local/bin/stockfish", 
+    "/opt/stockfish/stockfish",
+    "stockfish"  # If it's in PATH
+]
 
 async def initialize_engines():
     """Initialize available chess engines"""
     global engines
     
-    # Try to initialize Stockfish
-    try:
-        if os.path.exists(engine_paths["stockfish"]):
-            engines["stockfish"] = chess.engine.SimpleEngine.popen_uci(engine_paths["stockfish"])
-            logger.info("✅ Stockfish engine initialized")
-        else:
-            logger.warning("⚠️ Stockfish not found at default path")
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize Stockfish: {e}")
+    # Try to initialize Stockfish with multiple paths
+    stockfish_found = False
+    for path in STOCKFISH_PATHS:
+        try:
+            logger.info(f"🔍 Trying Stockfish path: {path}")
+            if path == "stockfish" or os.path.exists(path):
+                engines["stockfish"] = chess.engine.SimpleEngine.popen_uci(path)
+                logger.info(f"✅ Stockfish engine initialized at: {path}")
+                stockfish_found = True
+                break
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to initialize Stockfish at {path}: {e}")
+    
+    if not stockfish_found:
+        logger.error("❌ Stockfish engine not found at any path!")
+        logger.error("🔧 Available engines will be limited to random")
     
     # Random engine (always available)
     engines["random"] = "random_engine"
     logger.info("✅ Random engine initialized")
     
     logger.info(f"🎯 Available engines: {list(engines.keys())}")
+    
+    # Test Stockfish if found
+    if "stockfish" in engines and stockfish_found:
+        try:
+            test_board = chess.Board()
+            test_result = await engines["stockfish"].analyse(test_board, chess.engine.Limit(depth=1))
+            logger.info("✅ Stockfish test analysis successful!")
+        except Exception as e:
+            logger.error(f"❌ Stockfish test failed: {e}")
+            del engines["stockfish"]
 
 @app.on_event("startup")
 async def startup_event():

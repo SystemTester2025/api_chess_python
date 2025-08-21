@@ -2,7 +2,7 @@ services:
   - type: web
     name: chess-api
     env: python
-    buildCommand: "pip install -r requirements.txt"
+    buildCommand: "apt-get update && apt-get install -y stockfish && pip install -r requirements.txt"
     startCommand: "python main.py"
     plan: free
     healthCheckPath: /health
@@ -11,3 +11,5 @@ services:
         value: "3.11.0"
       - key: PORT
         value: "8000"
+      - key: STOCKFISH_PATH
+        value: "/usr/bin/stockfish"
