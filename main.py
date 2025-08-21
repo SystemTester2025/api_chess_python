@@ -448,7 +448,7 @@ async def get_engine_status():
         "engines": status,
         "server": {
             "status": "online",
-            "version": "1.0.0",
+            "version": "1.0.1-BYPASS-DEPLOYED",
             "platform": "render.com"
         }
     }
