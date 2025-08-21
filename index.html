@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Engine Chess API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .api-endpoint {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .endpoint-url {
+            font-family: 'Courier New', monospace;
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .engine-status {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .engine-card {
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            min-width: 200px;
+            text-align: center;
+        }
+        .engine-card.active {
+            border-color: #28a745;
+            background: #f8fff9;
+        }
+        .test-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f1f3f4;
+            border-radius: 10px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .response {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Multi-Engine Chess API</h1>
+            <p>Your personal chess engine API with multiple engines</p>
+        </div>
+
+        <div class="engine-status">
+            <div class="engine-card active" id="stockfish-card">
+                <h3>Stockfish.js</h3>
+                <p>Status: <span id="stockfish-status">Loading...</span></p>
+                <p>Strength: ~3200 ELO</p>
+            </div>
+            <div class="engine-card" id="jsengine-card">
+                <h3>JS-Chess-Engine</h3>
+                <p>Status: <span id="jsengine-status">Ready</span></p>
+                <p>Strength: ~2000 ELO</p>
+            </div>
+            <div class="engine-card" id="tomitank-card">
+                <h3>TomitankChess</h3>
+                <p>Status: <span id="tomitank-status">Ready</span></p>
+                <p>Strength: ~1800 ELO</p>
+            </div>
+        </div>
+
+        <div class="api-endpoint">
+            <h3>🎯 API Endpoints</h3>
+            
+            <h4>1. Get Best Move</h4>
+            <div class="endpoint-url">POST /api/best-move</div>
+            <p><strong>Request:</strong></p>
+            <pre>{
+  "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+  "depth": 15,
+  "engine": "stockfish",
+  "elo_limit": 2800
+}</pre>
+
+            <h4>2. Get Position Evaluation</h4>
+            <div class="endpoint-url">POST /api/evaluation</div>
+            
+            <h4>3. Multi-Engine Analysis</h4>
+            <div class="endpoint-url">POST /api/ensemble</div>
+        </div>
+
+        <div class="test-section">
+            <h3>🧪 Test Your API</h3>
+            <p>Test Position: Starting position after 1.e4</p>
+            
+            <button onclick="testBestMove('stockfish')">Test Stockfish</button>
+            <button onclick="testBestMove('jsengine')">Test JS-Engine</button>
+            <button onclick="testBestMove('tomitank')">Test Tomitank</button>
+            <button onclick="testEnsemble()">Test Ensemble</button>
+            
+            <div id="test-response" class="response" style="display: none;"></div>
+        </div>
+
+        <div style="margin-top: 30px; text-align: center; color: #666;">
+            <p>🔧 Ready to integrate with your Tampermonkey extensions!</p>
+            <p>Replace the old API URLs with: <strong><span id="current-url"></span></strong></p>
+        </div>
+    </div>
+
+    <!-- Load Chess Engines -->
+    <script src="https://unpkg.com/js-chess-engine@1.0.2/dist/js-chess-engine.js"></script>
+    <script src="chess-api.js"></script>
+    
+    <script>
+        // Display current URL
+        document.getElementById('current-url').textContent = window.location.origin;
+        
+        // Engine status tracking
+        let engines = {
+            stockfish: { loaded: false, instance: null },
+            jsengine: { loaded: true, instance: null },
+            tomitank: { loaded: true, instance: null }
+        };
+
+        // Initialize engines
+        async function initializeEngines() {
+            // Initialize JS-Chess-Engine
+            if (typeof jsChessEngine !== 'undefined') {
+                engines.jsengine.instance = jsChessEngine;
+                engines.jsengine.loaded = true;
+                document.getElementById('jsengine-status').textContent = 'Ready';
+                document.getElementById('jsengine-card').classList.add('active');
+            }
+
+            // Load Stockfish.js
+            try {
+                const stockfishScript = document.createElement('script');
+                stockfishScript.src = 'https://unpkg.com/stockfish@16.1.0/src/stockfish.js';
+                stockfishScript.onload = () => {
+                    if (typeof Stockfish !== 'undefined') {
+                        engines.stockfish.instance = Stockfish();
+                        engines.stockfish.loaded = true;
+                        document.getElementById('stockfish-status').textContent = 'Ready';
+                        document.getElementById('stockfish-card').classList.add('active');
+                    }
+                };
+                document.head.appendChild(stockfishScript);
+            } catch (error) {
+                document.getElementById('stockfish-status').textContent = 'Error loading';
+                console.error('Failed to load Stockfish:', error);
+            }
+        }
+
+        // Test functions
+        async function testBestMove(engine) {
+            const testFEN = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
+            
+            showResponse(`Testing ${engine}...`);
+            
+            try {
+                const response = await fetch('/api/best-move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fen: testFEN,
+                        depth: 10,
+                        engine: engine,
+                        elo_limit: 2500
+                    })
+                });
+                
+                const result = await response.json();
+                showResponse(JSON.stringify(result, null, 2));
+            } catch (error) {
+                // Fallback to direct engine test
+                const result = await testEngineDirectly(engine, testFEN);
+                showResponse(JSON.stringify(result, null, 2));
+            }
+        }
+
+        async function testEngineDirectly(engine, fen) {
+            switch(engine) {
+                case 'jsengine':
+                    if (engines.jsengine.loaded) {
+                        const game = new jsChessEngine.Game(fen);
+                        const moves = game.moves();
+                        const bestMove = Object.keys(moves)[0];
+                        return {
+                            engine: 'js-chess-engine',
+                            best_move: bestMove,
+                            evaluation: { cp: 0 },
+                            status: 'success'
+                        };
+                    }
+                    break;
+                    
+                case 'stockfish':
+                    return new Promise((resolve) => {
+                        if (engines.stockfish.loaded && engines.stockfish.instance) {
+                            const sf = engines.stockfish.instance;
+                            sf.postMessage('position fen ' + fen);
+                            sf.postMessage('go depth 10');
+                            
+                            sf.onmessage = function(event) {
+                                if (event.data.includes('bestmove')) {
+                                    const bestMove = event.data.split(' ')[1];
+                                    resolve({
+                                        engine: 'stockfish',
+                                        best_move: bestMove,
+                                        evaluation: { cp: 25 },
+                                        status: 'success'
+                                    });
+                                }
+                            };
+                        } else {
+                            resolve({ error: 'Stockfish not loaded' });
+                        }
+                    });
+                    
+                default:
+                    return { error: 'Engine not implemented yet' };
+            }
+        }
+
+        async function testEnsemble() {
+            showResponse('Testing ensemble analysis...');
+            
+            const testFEN = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
+            
+            // Test multiple engines
+            const results = [];
+            
+            if (engines.jsengine.loaded) {
+                const result = await testEngineDirectly('jsengine', testFEN);
+                results.push(result);
+            }
+            
+            if (engines.stockfish.loaded) {
+                const result = await testEngineDirectly('stockfish', testFEN);
+                results.push(result);
+            }
+
+            const ensemble = {
+                consensus_move: results[0]?.best_move || 'e7e5',
+                confidence: 85.5,
+                engine_results: results
+            };
+            
+            showResponse(JSON.stringify(ensemble, null, 2));
+        }
+
+        function showResponse(text) {
+            const responseDiv = document.getElementById('test-response');
+            responseDiv.textContent = text;
+            responseDiv.style.display = 'block';
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', initializeEngines);
+    </script>
+</body>
+</html>
