@@ -253,7 +253,7 @@
                         return;
                     }
 
-                                        const len = $('.myhigh').length
+                    const len = $('.myhigh').length
                     const opp_len = $('hishigh').length
                     const my_peice_num = board.game.getPlayingAs()
                     const my_peice = my_peice_num === 1 ? 'white' : 'black'  // Convert number to string
@@ -304,18 +304,23 @@
                         }
 
 
-                        if (!len && can_interval && hint) {
+                        if (can_interval && hint) {
+                            // Clear any existing arrows first
+                            $('.myhigh').remove();
+                            console.log('🧹 Cleared old arrows, len was:', len);
+                            
                             can_interval = false
                             try {
 
                                 console.log("🎯 Requesting best move with engine:", selectedEngine, "depth:", chessBot.power, "elo:", chessBot.elo);
+                                console.log("📋 Sending position FEN:", fen.substring(0, 30) + "...");
                                 const data = await fetch(`${YOUR_API_URL}/api/v1/best-move`, {
                                     method: "POST",
                                     headers: {
                                         "Content-Type": "application/json"
                                     },
                                     body: JSON.stringify({
-                                        fen: chessBot.fen,
+                                        fen: fen,  // Use current fen, not chessBot.fen
                                         depth: chessBot.power,
                                         elo_limit: chessBot.elo,
                                         engine: selectedEngine
