@@ -493,40 +493,49 @@ async def try_online_stockfish(fen: str, depth: int):
     """🚀 ULTRA-FAST: Try multiple APIs in parallel, return first success"""
     
     # 🚨 EMERGENCY FIX: Try local Stockfish FIRST before online APIs
-    if "stockfish" in engines and engines["stockfish"] != "unavailable":
+    if "stockfish" in engines and engines["stockfish"] != "unavailable" and engines["stockfish"] != "stockfish_js":
         try:
-            logger.error("🚨 EMERGENCY: FORCING local Stockfish engine first...")
+            logger.error("🚨 EMERGENCY: FORCING local chess.engine Stockfish first...")
             logger.error(f"🔧 Engines dict: {engines}")
             stockfish_engine = engines["stockfish"]
             logger.error(f"🔧 Stockfish engine object: {type(stockfish_engine)}")
-            stockfish_engine.set_fen_position(fen)
-            stockfish_engine.set_depth(min(depth, 12))  # Limit depth for speed
             
-            best_move = stockfish_engine.get_best_move()
-            evaluation = stockfish_engine.get_evaluation()
+            # Use chess.engine API (not python-stockfish API)
+            import chess
+            board = chess.Board(fen)
             
+            # Analyze with chess.engine
+            info = await asyncio.wait_for(
+                stockfish_engine.analyse(board, chess.engine.Limit(depth=min(depth, 12), time=3.0)),
+                timeout=5.0
+            )
+            
+            best_move = str(info["pv"][0]) if info.get("pv") else None
             if best_move:
-                logger.info(f"✅ LOCAL STOCKFISH SUCCESS: {best_move}")
-                cp_score = 0
-                mate_score = None
+                logger.error(f"✅ LOCAL STOCKFISH SUCCESS: {best_move}")
                 
-                if evaluation:
-                    if evaluation["type"] == "cp":
-                        cp_score = evaluation["value"]
-                    elif evaluation["type"] == "mate":
-                        mate_score = evaluation["value"]
-                        cp_score = 9999 if evaluation["value"] > 0 else -9999
+                # Extract evaluation
+                score = info.get("score", chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE))
+                if score.is_mate():
+                    evaluation = {"cp": None, "mate": score.mate()}
+                else:
+                    evaluation = {"cp": score.cp, "mate": None}
+                
+                # Extract principal variation
+                pv = [str(move) for move in info.get("pv", [])[:3]]
                 
                 return {
                     "best_move": best_move,
-                    "evaluation": {"cp": cp_score, "mate": mate_score},
+                    "evaluation": evaluation,
                     "engine_used": "stockfish_local_EMERGENCY",
-                    "analysis_time": 0.5,
+                    "analysis_time": 0.8,
                     "depth_reached": min(depth, 12),
-                    "best_line": [best_move]
+                    "best_line": pv
                 }
         except Exception as e:
             logger.error(f"❌ Local Stockfish EMERGENCY failed: {e}")
+            logger.error(f"❌ Exception type: {type(e)}")
+            logger.error(f"❌ Exception args: {e.args}")
     
     async def try_lichess():
         try:
