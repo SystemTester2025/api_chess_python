@@ -495,8 +495,10 @@ async def try_online_stockfish(fen: str, depth: int):
     # 🚨 EMERGENCY FIX: Try local Stockfish FIRST before online APIs
     if "stockfish" in engines and engines["stockfish"] != "unavailable":
         try:
-            logger.info("🔧 EMERGENCY: Trying local Stockfish engine first...")
+            logger.error("🚨 EMERGENCY: FORCING local Stockfish engine first...")
+            logger.error(f"🔧 Engines dict: {engines}")
             stockfish_engine = engines["stockfish"]
+            logger.error(f"🔧 Stockfish engine object: {type(stockfish_engine)}")
             stockfish_engine.set_fen_position(fen)
             stockfish_engine.set_depth(min(depth, 12))  # Limit depth for speed
             
