@@ -40,13 +40,7 @@
             debugLogs = debugLogs.slice(-MAX_LOGS);
         }
 
-        // Also log to console with enhanced formatting
-        const prefix = `🔍 [${level.toUpperCase()}] ${timestamp}`;
-        if (data) {
-            console.log(`${prefix} ${message}`, data);
-        } else {
-            console.log(`${prefix} ${message}`);
-        }
+        // Store in memory only - no console.log to avoid infinite loops
     }
 
     function downloadLogs() {
@@ -73,24 +67,8 @@
         logToFile('INFO', '📥 Debug logs downloaded successfully');
     }
 
-    // Override console.log to capture everything
-    const originalLog = console.log;
-    console.log = function (...args) {
-        originalLog.apply(console, args);
-        logToFile('INFO', args.join(' '), args.length > 1 ? args : null);
-    };
-
-    const originalError = console.error;
-    console.error = function (...args) {
-        originalError.apply(console, args);
-        logToFile('ERROR', args.join(' '), args.length > 1 ? args : null);
-    };
-
-    const originalWarn = console.warn;
-    console.warn = function (...args) {
-        originalWarn.apply(console, args);
-        logToFile('WARN', args.join(' '), args.length > 1 ? args : null);
-    };
+    // SAFE LOGGING: Don't override console.log to avoid infinite loops
+    // Instead, we'll manually call logToFile() where needed
 
     logToFile('SYSTEM', '🚀 Chess Bot Debug Logging System Initialized');
 
