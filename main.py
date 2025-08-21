@@ -464,58 +464,94 @@ async def health_check():
     }
 
 async def try_online_stockfish(fen: str, depth: int):
-    """Try multiple online Stockfish APIs for real analysis"""
+    """Try multiple online Stockfish APIs with improved reliability"""
     
-    # API 1: Lichess Stockfish API (free and reliable)
+    # API 1: Lichess Stockfish API (most reliable, try first)
+    for attempt in range(3):  # Retry up to 3 times
+        try:
+            logger.info(f"🌐 Trying Lichess Stockfish API (attempt {attempt + 1}/3)...")
+            timeout = aiohttp.ClientTimeout(total=8)  # Shorter timeout
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                url = "https://lichess.org/api/cloud-eval"
+                params = {
+                    "fen": fen,
+                    "multiPv": 1,
+                    "variant": "standard"
+                }
+                
+                async with session.get(url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if "pvs" in data and len(data["pvs"]) > 0:
+                            pv = data["pvs"][0]
+                            best_move = pv["moves"].split()[0] if "moves" in pv else None
+                            
+                            if best_move:
+                                logger.info("✅ Lichess API success!")
+                                return {
+                                    "best_move": best_move,
+                                    "evaluation": {
+                                        "cp": pv.get("cp", 0),
+                                        "mate": pv.get("mate", None)
+                                    },
+                                    "engine_used": "lichess_stockfish",
+                                    "depth_reached": depth,
+                                    "best_line": pv.get("moves", "").split()[:3]
+                                }
+        except Exception as e:
+            logger.warning(f"⚠️ Lichess API attempt {attempt + 1} failed: {e}")
+            if attempt < 2:  # Wait before retry
+                await asyncio.sleep(0.5)
+    
+    # API 2: Chess.com API (try cloud analysis)
     try:
-        logger.info("🌐 Trying Lichess Stockfish API...")
-        async with aiohttp.ClientSession() as session:
-            # Lichess cloud analysis API
-            url = "https://lichess.org/api/cloud-eval"
-            params = {
+        logger.info("🌐 Trying Chess.com analysis API...")
+        timeout = aiohttp.ClientTimeout(total=6)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            # Chess.com has a different endpoint structure
+            url = "https://www.chess.com/callback/analysis"
+            payload = {
                 "fen": fen,
-                "multiPv": 1,
-                "variant": "standard"
+                "purpose": "analysis"
             }
             
-            async with session.get(url, params=params, timeout=10) as response:
+            async with session.post(url, json=payload) as response:
                 if response.status == 200:
                     data = await response.json()
-                    if "pvs" in data and len(data["pvs"]) > 0:
-                        pv = data["pvs"][0]
-                        best_move = pv["moves"].split()[0] if "moves" in pv else None
-                        
-                        if best_move:
-                            return {
-                                "best_move": best_move,
-                                "evaluation": {
-                                    "cp": pv.get("cp", 0),
-                                    "mate": pv.get("mate", None)
-                                },
-                                "engine_used": "lichess_stockfish",
-                                "depth_reached": depth,
-                                "best_line": pv.get("moves", "").split()[:3]
-                            }
+                    if "best" in data and data["best"]:
+                        logger.info("✅ Chess.com API success!")
+                        return {
+                            "best_move": data["best"],
+                            "evaluation": {
+                                "cp": data.get("eval", 0),
+                                "mate": data.get("mate", None)
+                            },
+                            "engine_used": "chess_com_stockfish",
+                            "depth_reached": depth,
+                            "best_line": [data["best"]]
+                        }
     except Exception as e:
-        logger.warning(f"⚠️ Lichess API failed: {e}")
+        logger.warning(f"⚠️ Chess.com API failed: {e}")
     
-    # API 2: Try ChessDB API (another free option)
+    # API 3: ChessDB API (reliable fallback)
     try:
         logger.info("🌐 Trying ChessDB API...")
-        async with aiohttp.ClientSession() as session:
-            url = f"http://www.chessdb.cn/cdb.php"
+        timeout = aiohttp.ClientTimeout(total=6)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            url = "http://www.chessdb.cn/cdb.php"
             params = {
                 "action": "querypv",
                 "board": fen,
                 "json": 1
             }
             
-            async with session.get(url, params=params, timeout=10) as response:
+            async with session.get(url, params=params) as response:
                 if response.status == 200:
                     data = await response.json()
                     if "status" in data and data["status"] == "ok" and "pv" in data:
                         moves = data["pv"].split()
                         if moves:
+                            logger.info("✅ ChessDB API success!")
                             return {
                                 "best_move": moves[0],
                                 "evaluation": {
@@ -529,21 +565,23 @@ async def try_online_stockfish(fen: str, depth: int):
     except Exception as e:
         logger.warning(f"⚠️ ChessDB API failed: {e}")
     
-    # API 3: Try Stockfish Online API
+    # API 4: Stockfish.online (another option)
     try:
-        logger.info("🌐 Trying Stockfish Online API...")
-        async with aiohttp.ClientSession() as session:
-            url = "https://stockfish-api.herokuapp.com/api/stockfish"
-            payload = {
+        logger.info("🌐 Trying Stockfish.online API...")
+        timeout = aiohttp.ClientTimeout(total=8)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            url = "https://stockfish.online/api/s/v2.php"
+            params = {
                 "fen": fen,
-                "depth": min(depth, 20),  # Limit depth for API
-                "time": 2000  # 2 second limit
+                "depth": min(depth, 18),
+                "mode": "bestmove"
             }
             
-            async with session.post(url, json=payload, timeout=15) as response:
+            async with session.get(url, params=params) as response:
                 if response.status == 200:
                     data = await response.json()
-                    if "bestmove" in data:
+                    if "bestmove" in data and data["bestmove"]:
+                        logger.info("✅ Stockfish.online API success!")
                         return {
                             "best_move": data["bestmove"],
                             "evaluation": {
@@ -555,9 +593,9 @@ async def try_online_stockfish(fen: str, depth: int):
                             "best_line": [data["bestmove"]]
                         }
     except Exception as e:
-        logger.warning(f"⚠️ Stockfish Online API failed: {e}")
+        logger.warning(f"⚠️ Stockfish.online API failed: {e}")
     
-    logger.warning("⚠️ All online Stockfish APIs failed")
+    logger.error("❌ ALL online Stockfish APIs failed - this should rarely happen!")
     return None
 
 # Engine-specific analysis functions
@@ -621,8 +659,15 @@ async def analyze_with_stockfish(board: chess.Board, depth: int, time_limit: flo
         except Exception as e:
             logger.warning(f"⚠️ Native Stockfish failed: {e}, using backup")
     
-    # Use intelligent backup engine (either as primary or fallback)
-    return await analyze_with_backup(board)
+    # CRITICAL: Only use backup as absolute last resort
+    logger.error("🚨 CRITICAL: All real Stockfish engines failed! Using emergency backup.")
+    logger.error("🚨 This should almost never happen - API issues detected!")
+    
+    # Use backup but mark it clearly
+    backup_result = await analyze_with_backup(board)
+    backup_result["engine_used"] = "EMERGENCY_BACKUP - APIs_FAILED"
+    backup_result["warning"] = "Real Stockfish unavailable - using weak backup!"
+    return backup_result
 
 async def analyze_with_backup(board: chess.Board):
     """Intelligent backup chess engine with opening book and principles - Enhanced for better play"""
