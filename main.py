@@ -492,6 +492,40 @@ def clean_move_format(raw_move: str) -> str:
 async def try_online_stockfish(fen: str, depth: int):
     """🚀 ULTRA-FAST: Try multiple APIs in parallel, return first success"""
     
+    # 🚨 EMERGENCY FIX: Try local Stockfish FIRST before online APIs
+    if "stockfish" in engines and engines["stockfish"] != "unavailable":
+        try:
+            logger.info("🔧 EMERGENCY: Trying local Stockfish engine first...")
+            stockfish_engine = engines["stockfish"]
+            stockfish_engine.set_fen_position(fen)
+            stockfish_engine.set_depth(min(depth, 12))  # Limit depth for speed
+            
+            best_move = stockfish_engine.get_best_move()
+            evaluation = stockfish_engine.get_evaluation()
+            
+            if best_move:
+                logger.info(f"✅ LOCAL STOCKFISH SUCCESS: {best_move}")
+                cp_score = 0
+                mate_score = None
+                
+                if evaluation:
+                    if evaluation["type"] == "cp":
+                        cp_score = evaluation["value"]
+                    elif evaluation["type"] == "mate":
+                        mate_score = evaluation["value"]
+                        cp_score = 9999 if evaluation["value"] > 0 else -9999
+                
+                return {
+                    "best_move": best_move,
+                    "evaluation": {"cp": cp_score, "mate": mate_score},
+                    "engine_used": "stockfish_local_EMERGENCY",
+                    "analysis_time": 0.5,
+                    "depth_reached": min(depth, 12),
+                    "best_line": [best_move]
+                }
+        except Exception as e:
+            logger.error(f"❌ Local Stockfish EMERGENCY failed: {e}")
+    
     async def try_lichess():
         try:
             timeout = aiohttp.ClientTimeout(total=2)
