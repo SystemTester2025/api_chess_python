@@ -261,7 +261,8 @@
                     fen = board.game.getFEN()
                     chessBot.fen = board.game.getFEN()
 
-                    console.log('🎮 Player info:', { my_peice_num, my_peice, turn, fen: fen.substring(0, 20) + '...' })
+                    const timestamp = new Date().toLocaleTimeString();
+                    console.log(`🕐 [${timestamp}] 🎮 Player info:`, { my_peice_num, my_peice, turn, fen: fen.substring(0, 20) + '...' })
 
                     // Return early if board state is not ready
                     if (my_peice_num === undefined || turn === undefined) {
@@ -290,13 +291,23 @@
                                     })
                                 });
 
-                                if (data.ok) {
-                                    const resp = await data.json();
-                                    console.log(resp);
-                                    best_cp = resp.evaluation?.cp || 0;
-                                } else {
-                                    console.log('⚠️ Evaluation API error:', data.status);
-                                }
+                            if (data.ok) {
+                                const resp = await data.json();
+                                
+                                // 🔍 DETAILED EVALUATION RESPONSE LOGGING
+                                console.log('📤 EVALUATION REQUEST:');
+                                console.log('   📝 FEN:', fen.substring(0, 30) + '...');
+                                console.log('   👀 Perspective:', my_peice);
+                                console.log('📥 EVALUATION RESPONSE:');
+                                console.log('   📊 Evaluation:', resp.evaluation);
+                                console.log('   🎯 Winning Chances:', resp.winning_chances + '%');
+                                console.log('   🧠 Full Response:', resp);
+                                
+                                best_cp = resp.evaluation?.cp || 0;
+                            } else {
+                                console.log('⚠️ Evaluation API error:', data.status);
+                                console.log('⚠️ Response body:', await data.text());
+                            }
                             }
                             catch (e) {
                                 console.log('⚠️ Evaluation fetch failed:', e)
@@ -308,7 +319,7 @@
                             // Clear any existing arrows first
                             $('.myhigh').remove();
                             console.log('🧹 Cleared old arrows, len was:', len);
-                            
+
                             can_interval = false
                             try {
 
@@ -330,7 +341,23 @@
                                 if (data.ok) {
                                     const resp = await data.json();
                                     continuation = resp.best_move;
-                                    console.log('✅ API Response:', resp);
+                                    
+                                    // 🔍 DETAILED API RESPONSE LOGGING
+                                    console.log('📤 REQUEST SENT TO API:');
+                                    console.log('   🌐 URL:', `${YOUR_API_URL}/api/v1/best-move`);
+                                    console.log('   📝 FEN:', fen);
+                                    console.log('   🎯 Engine:', selectedEngine);
+                                    console.log('   📊 Depth:', chessBot.power);
+                                    console.log('   🎮 ELO:', chessBot.elo);
+                                    
+                                    console.log('📥 FULL API RESPONSE:');
+                                    console.log('   🎯 Best Move:', resp.best_move);
+                                    console.log('   🔧 Engine Used:', resp.engine_used);
+                                    console.log('   📊 Evaluation:', resp.evaluation);
+                                    console.log('   ⏱️ Analysis Time:', resp.analysis_time + 's');
+                                    console.log('   📈 Depth Reached:', resp.depth_reached);
+                                    console.log('   🧠 Full Response:', resp);
+                                    
                                     console.log("🎯 Best move received:", continuation);
 
                                     if (continuation) {
@@ -338,6 +365,7 @@
                                     }
                                 } else {
                                     console.log('❌ Best move API error:', data.status);
+                                    console.log('❌ Response body:', await data.text());
                                 }
 
                                 can_interval = true
@@ -375,6 +403,16 @@
 
                                 if (data.ok) {
                                     const resp = await data.json();
+                                    
+                                    // 🔍 DETAILED OPPONENT EVALUATION LOGGING
+                                    console.log('📤 OPPONENT EVALUATION REQUEST:');
+                                    console.log('   📝 FEN:', fen.substring(0, 30) + '...');
+                                    console.log('   👀 Perspective:', my_peice);
+                                    console.log('📥 OPPONENT EVALUATION RESPONSE:');
+                                    console.log('   📊 Evaluation:', resp.evaluation);
+                                    console.log('   🎯 Winning Chances:', resp.winning_chances + '%');
+                                    console.log('   🧠 Full Response:', resp);
+                                    
                                     cp = resp.evaluation?.cp || 0;
                                     $('.myanalysis').remove();
 
@@ -390,6 +428,7 @@
                                     $('#evalMove').css({ "color": resp.winning_chances > 50 ? '#00ff00' : '#ff0000' });
                                 } else {
                                     console.log('⚠️ Opponent evaluation API error:', data.status);
+                                    console.log('⚠️ Response body:', await data.text());
                                 }
                             }
                             catch (e) {
