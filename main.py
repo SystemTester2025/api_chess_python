@@ -350,42 +350,28 @@ async def get_best_move(request: MoveRequest):
 
 @app.post("/api/v1/evaluation", response_model=EvaluationResponse)
 async def get_evaluation(request: EvaluationRequest):
-    """Get position evaluation - SIMPLIFIED to avoid 500 errors"""
+    """Get position evaluation"""
     try:
         board = chess.Board(request.fen)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid FEN: {str(e)}")
     
-    try:
-        # Simple evaluation without calling get_best_move to avoid circular issues
-        simple_eval = {"cp": 0, "mate": None}  # Default neutral evaluation
-        
-        evaluation = {
-            "evaluation": simple_eval,
-            "move_quality": {
-                "last_move": "unknown",
-                "classification": "analyzing",
-                "accuracy": 50
-            },
-            "position_type": get_position_type(board),
-            "winning_chances": calculate_winning_chances(simple_eval)
-        }
-        
-        return evaluation
-        
-    except Exception as e:
-        logger.error(f"❌ Evaluation endpoint error: {e}")
-        # Return safe fallback response
-        return {
-            "evaluation": {"cp": 0, "mate": None},
-            "move_quality": {
-                "last_move": "error",
-                "classification": "unknown", 
-                "accuracy": 0
-            },
-            "position_type": "unknown",
-            "winning_chances": 50.0
-        }
+    # Get best move first
+    move_request = MoveRequest(fen=request.fen, depth=12)
+    move_result = await get_best_move(move_request)
+    
+    evaluation = {
+        "evaluation": move_result.evaluation,
+        "move_quality": {
+            "last_move": move_result.best_move,
+            "classification": "good",
+            "accuracy": 95
+        },
+        "position_type": get_position_type(board),
+        "winning_chances": calculate_winning_chances(move_result.evaluation)
+    }
+    
+    return evaluation
 
 @app.post("/api/v1/ensemble", response_model=EnsembleResponse)
 async def get_ensemble_analysis(request: EnsembleRequest):
@@ -508,7 +494,7 @@ async def try_online_stockfish(fen: str, depth: int):
     
     async def try_lichess():
         try:
-            timeout = aiohttp.ClientTimeout(total=3)  # Increased for reliability
+            timeout = aiohttp.ClientTimeout(total=2)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = "https://lichess.org/api/cloud-eval"
                 params = {"fen": fen, "multiPv": 1, "variant": "standard"}
@@ -530,13 +516,13 @@ async def try_online_stockfish(fen: str, depth: int):
                                         "depth_reached": depth,
                                         "best_line": pv.get("moves", "").split()[:3]
                                     }
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"❌ Lichess API failed: {e}")
         return None
 
     async def try_chessdb():
         try:
-            timeout = aiohttp.ClientTimeout(total=3)  # Increased for reliability
+            timeout = aiohttp.ClientTimeout(total=2)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = "http://www.chessdb.cn/cdb.php"
                 params = {"action": "querypv", "board": fen, "json": 1}
@@ -557,8 +543,8 @@ async def try_online_stockfish(fen: str, depth: int):
                                         "depth_reached": depth,
                                         "best_line": moves[:3]
                                     }
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"❌ ChessDB API failed: {e}")
         return None
 
     async def try_stockfish_online():
@@ -580,19 +566,22 @@ async def try_online_stockfish(fen: str, depth: int):
                                     "engine_used": "stockfish_online",
                                     "analysis_time": 1.2,
                                     "depth_reached": depth,
-                                    "best_line": [clean_move]
-                                }
-        except Exception:
-            pass
+                                                                            "best_line": [clean_move]
+                                    }
+        except Exception as e:
+            logger.error(f"❌ Stockfish.online API failed: {e}")
         return None
 
     # 🚀 RUN ALL APIs IN PARALLEL - return first success
     logger.info("🚀 Parallel API calls for maximum speed...")
+    
+    # ADD DETAILED LOGGING TO DEBUG THE ISSUE
+    logger.info("🔍 Starting parallel API calls...")
     tasks = [try_lichess(), try_chessdb(), try_stockfish_online()]
     
     try:
-        # Wait for first successful result (max 5 seconds total for better reliability)
-        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED, timeout=5)
+        # Wait for first successful result (max 10 seconds total - increased timeout)
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED, timeout=10)
         
         # Cancel remaining tasks to save resources
         for task in pending:
@@ -604,10 +593,20 @@ async def try_online_stockfish(fen: str, depth: int):
             if result:
                 logger.info(f"✅ FASTEST WIN: {result['engine_used']} in {result['analysis_time']}s")
                 return result
+        
+        # If we get here, no tasks succeeded
+        logger.error("❌ ALL parallel API tasks completed but returned None!")
+        logger.error(f"❌ Number of completed tasks: {len(done)}")
                 
+    except asyncio.TimeoutError:
+        logger.error("❌ ALL APIs TIMED OUT after 10 seconds!")
+        # Cancel all pending tasks
+        for task in pending:
+            task.cancel()
     except Exception as e:
-        logger.warning(f"⚠️ Parallel API error: {e}")
+        logger.error(f"❌ Parallel API error: {e}")
     
+    logger.error("❌ RETURNING None - all online APIs failed!")
     return None
 
 async def try_online_stockfish_OLD_SLOW(fen: str, depth: int):
@@ -766,14 +765,10 @@ async def analyze_with_stockfish(board: chess.Board, depth: int, time_limit: flo
     
     logger.info("🔧 Using REAL Stockfish analysis for best moves")
     
-    # Try online Stockfish APIs first (most reliable) 
-    logger.info("🌐 Attempting online Stockfish APIs...")
+    # Try online Stockfish APIs first (most reliable)
     online_result = await try_online_stockfish(board.fen(), depth)
     if online_result:
-        logger.info(f"✅ Online API SUCCESS: {online_result['engine_used']} returned {online_result['best_move']}")
         return online_result
-    else:
-        logger.warning("⚠️ ALL online Stockfish APIs FAILED - falling back to backup engine")
     
     # Try Stockfish.js as backup
     if False and "stockfish" in engines and engines["stockfish"] == "stockfish_js" and stockfish_js_engine is not None:
