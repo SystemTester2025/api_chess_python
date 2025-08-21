@@ -121,27 +121,43 @@ async def download_stockfish_binary():
                     
                     # Extract the tar file
                     import tarfile
+                    extract_dir = "/tmp/stockfish_extracted"
+                    os.makedirs(extract_dir, exist_ok=True)
+                    
                     with tarfile.open(tar_path, 'r') as tar:
-                        tar.extractall('/tmp/')
+                        tar.extractall(extract_dir)
+                    
+                    logger.error(f"🔍 Extracted to: {extract_dir}")
                     
                     # Find the stockfish binary in extracted files
                     import glob
                     possible_paths = [
-                        "/tmp/stockfish*",
-                        "/tmp/*/stockfish*",
-                        "/tmp/*/*/stockfish*"
+                        f"{extract_dir}/stockfish*",
+                        f"{extract_dir}/*/stockfish*",
+                        f"{extract_dir}/*/*/stockfish*",
+                        f"{extract_dir}/*/*/*/stockfish*"
                     ]
                     
                     for pattern in possible_paths:
                         files = glob.glob(pattern)
+                        logger.error(f"🔍 Pattern {pattern} found: {files}")
                         for file_path in files:
-                            if os.path.isfile(file_path) and 'stockfish' in os.path.basename(file_path).lower():
+                            if os.path.isfile(file_path) and os.access(file_path, os.X_OK):
+                                logger.error(f"✅ Found executable Stockfish: {file_path}")
+                                return file_path
+                            elif os.path.isfile(file_path) and 'stockfish' in os.path.basename(file_path).lower():
                                 # Make executable
                                 os.chmod(file_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH)
-                                logger.error(f"✅ Downloaded Stockfish to: {file_path}")
+                                logger.error(f"✅ Made executable and using: {file_path}")
                                 return file_path
                     
-                    logger.error("❌ Stockfish binary not found in extracted files")
+                    # List all files in extraction directory for debugging
+                    all_files = []
+                    for root, dirs, files in os.walk(extract_dir):
+                        for file in files:
+                            all_files.append(os.path.join(root, file))
+                    logger.error(f"❌ All extracted files: {all_files}")
+                    
                     return None
                 else:
                     logger.error(f"❌ Download failed: HTTP {response.status}")
