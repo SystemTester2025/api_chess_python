@@ -423,9 +423,71 @@
                                      </div>`);
                                     }
 
-                                    $('#evalPosition').text(resp.winning_chances > 50 ? 'Winning' : 'Losing');
-                                    $('#evalMove').text(resp.move_quality?.last_move || 'Unknown');
-                                    $('#evalMove').css({ "color": resp.winning_chances > 50 ? '#00ff00' : '#ff0000' });
+                                    // 🎯 EVALUATION DISPLAY: Convert API response to user-friendly text
+                                    const evaluation = resp.evaluation || {};
+                                    const cp = evaluation.cp || 0;
+                                    const mate = evaluation.mate;
+                                    
+                                    // Calculate winning chances from centipawn evaluation
+                                    let winning_chances = 50; // Default neutral
+                                    if (mate !== null) {
+                                        winning_chances = mate > 0 ? 95 : 5; // Mate for/against us
+                                    } else {
+                                        // Convert centipawns to winning percentage (rough approximation)
+                                        winning_chances = 50 + (cp * 0.04); // ~25cp = +1% chance
+                                        winning_chances = Math.max(5, Math.min(95, winning_chances));
+                                    }
+                                    
+                                    // Position evaluation
+                                    let positionText = "Balanced";
+                                    let positionColor = "#ffff00"; // Yellow for balanced
+                                    
+                                    if (mate !== null) {
+                                        positionText = mate > 0 ? `Mate in ${mate}` : `Mated in ${Math.abs(mate)}`;
+                                        positionColor = mate > 0 ? "#00ff00" : "#ff0000";
+                                    } else if (cp > 200) {
+                                        positionText = "Winning";
+                                        positionColor = "#00ff00";
+                                    } else if (cp > 50) {
+                                        positionText = "Better";
+                                        positionColor = "#90EE90";
+                                    } else if (cp < -200) {
+                                        positionText = "Losing";
+                                        positionColor = "#ff0000";
+                                    } else if (cp < -50) {
+                                        positionText = "Worse";
+                                        positionColor = "#FFA500";
+                                    }
+                                    
+                                    // Move quality evaluation
+                                    let moveText = "Good Move";
+                                    let moveColor = "#90EE90";
+                                    
+                                    if (mate !== null && mate > 0) {
+                                        moveText = "Best Move!";
+                                        moveColor = "#00ff00";
+                                    } else if (cp > 100) {
+                                        moveText = "Excellent!";
+                                        moveColor = "#00ff00";
+                                    } else if (cp > 25) {
+                                        moveText = "Good Move";
+                                        moveColor = "#90EE90";
+                                    } else if (cp > -25) {
+                                        moveText = "OK Move";
+                                        moveColor = "#ffff00";
+                                    } else if (cp > -100) {
+                                        moveText = "Inaccuracy";
+                                        moveColor = "#FFA500";
+                                    } else {
+                                        moveText = "Mistake";
+                                        moveColor = "#ff0000";
+                                    }
+                                    
+                                    // Update UI
+                                    $('#evalPosition').text(positionText);
+                                    $('#evalPosition').css({ "color": positionColor });
+                                    $('#evalMove').text(moveText);
+                                    $('#evalMove').css({ "color": moveColor });
                                 } else {
                                     console.log('⚠️ Opponent evaluation API error:', data.status);
                                     console.log('⚠️ Response body:', await data.text());

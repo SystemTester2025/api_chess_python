@@ -297,7 +297,7 @@
 
 
                 const board = $('chess-board')[0] || $('wc-chess-board')[0];
-                
+
                 // Check if board and game exist
                 if (!board || !board.game) {
                     console.log('⚠️ Board not ready yet');
@@ -339,7 +339,7 @@
                         console.log(elo, power)
 
                         console.log('🎯 Requesting best move with engine:', selectedEngine, 'depth:', power, 'elo:', elo);
-                        
+
                         try {
                             const data = await fetch(`${YOUR_API_URL}/api/v1/best-move`, {
                                 method: 'POST',
@@ -366,7 +366,7 @@
                         } catch (error) {
                             console.log('❌ Best move fetch failed:', error);
                         }
-                        
+
                         can_interval = true
 
 
@@ -377,7 +377,7 @@
                 else {
                     if (fen !== checkfen) {
                         console.log(best_cp)
-                        
+
                         try {
                             const resp = await fetch(`${YOUR_API_URL}/api/v1/evaluation`, {
                                 method: 'POST',

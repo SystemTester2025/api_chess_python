@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CORS Test for Chess API</title>
+</head>
+
+<body>
+    <h1>Chess API CORS Test</h1>
+    <button onclick="testEvaluation()">Test Evaluation API</button>
+    <button onclick="testBestMove()">Test Best Move API</button>
+    <div id="results" style="margin-top: 20px; padding: 10px; background: #f0f0f0;"></div>
+
+    <script>
+        const API_URL = 'https://api-chess-python.onrender.com';
+
+        async function testEvaluation() {
+            const results = document.getElementById('results');
+            results.innerHTML = 'Testing evaluation API...';
+
+            try {
+                const response = await fetch(`${API_URL}/api/v1/evaluation`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
+                        perspective: 'white'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    results.innerHTML = `✅ Evaluation API works! Response: ${JSON.stringify(data, null, 2)}`;
+                } else {
+                    results.innerHTML = `❌ Evaluation API failed with status: ${response.status}`;
+                }
+            } catch (error) {
+                results.innerHTML = `❌ CORS Error: ${error.message}`;
+            }
+        }
+
+        async function testBestMove() {
+            const results = document.getElementById('results');
+            results.innerHTML = 'Testing best move API...';
+
+            try {
+                const response = await fetch(`${API_URL}/api/v1/best-move`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                        depth: 10,
+                        engine: 'stockfish'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    results.innerHTML = `✅ Best Move API works! Response: ${JSON.stringify(data, null, 2)}`;
+                } else {
+                    results.innerHTML = `❌ Best Move API failed with status: ${response.status}`;
+                }
+            } catch (error) {
+                results.innerHTML = `❌ CORS Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+
+</html>

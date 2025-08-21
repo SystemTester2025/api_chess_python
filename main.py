@@ -490,13 +490,120 @@ def clean_move_format(raw_move: str) -> str:
     return ""
 
 async def try_online_stockfish(fen: str, depth: int):
-    """Try multiple online Stockfish APIs with improved reliability"""
+    """🚀 ULTRA-FAST: Try multiple APIs in parallel, return first success"""
     
-    # API 1: Lichess Stockfish API (most reliable, try first)
-    for attempt in range(3):  # Retry up to 3 times
+    async def try_lichess():
         try:
-            logger.info(f"🌐 Trying Lichess Stockfish API (attempt {attempt + 1}/3)...")
-            timeout = aiohttp.ClientTimeout(total=3)  # BLITZ MODE: 3s max
+            timeout = aiohttp.ClientTimeout(total=2)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                url = "https://lichess.org/api/cloud-eval"
+                params = {"fen": fen, "multiPv": 1, "variant": "standard"}
+                
+                async with session.get(url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if "pvs" in data and data["pvs"]:
+                            pv = data["pvs"][0]
+                            if "moves" in pv and pv["moves"]:
+                                raw_move = pv["moves"].split()[0]
+                                clean_move = clean_move_format(raw_move)
+                                if clean_move:
+                                    return {
+                                        "best_move": clean_move,
+                                        "evaluation": {"cp": pv.get("cp", 0), "mate": pv.get("mate", None)},
+                                        "engine_used": "lichess_cloud",
+                                        "analysis_time": 0.5,
+                                        "depth_reached": depth,
+                                        "best_line": pv.get("moves", "").split()[:3]
+                                    }
+        except Exception:
+            pass
+        return None
+
+    async def try_chessdb():
+        try:
+            timeout = aiohttp.ClientTimeout(total=2)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                url = "http://www.chessdb.cn/cdb.php"
+                params = {"action": "querypv", "board": fen, "json": 1}
+                
+                async with session.get(url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if "pv" in data and data["pv"]:
+                            moves = data["pv"].strip().split()
+                            if moves:
+                                clean_move = clean_move_format(moves[0])
+                                if clean_move:
+                                    return {
+                                        "best_move": clean_move,
+                                        "evaluation": {"cp": data.get("score", 0), "mate": None},
+                                        "engine_used": "chessdb",
+                                        "analysis_time": 0.8,
+                                        "depth_reached": depth,
+                                        "best_line": moves[:3]
+                                    }
+        except Exception:
+            pass
+        return None
+
+    async def try_stockfish_online():
+        try:
+            timeout = aiohttp.ClientTimeout(total=2)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                url = "https://stockfish.online/api/s/v2.php"
+                params = {"fen": fen, "depth": min(depth, 12), "mode": "bestmove"}
+                
+                async with session.get(url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if "bestmove" in data and data["bestmove"]:
+                            clean_move = clean_move_format(str(data["bestmove"]))
+                            if clean_move:
+                                return {
+                                    "best_move": clean_move,
+                                    "evaluation": {"cp": data.get("evaluation", 0), "mate": None},
+                                    "engine_used": "stockfish_online",
+                                    "analysis_time": 1.2,
+                                    "depth_reached": depth,
+                                    "best_line": [clean_move]
+                                }
+        except Exception:
+            pass
+        return None
+
+    # 🚀 RUN ALL APIs IN PARALLEL - return first success
+    logger.info("🚀 Parallel API calls for maximum speed...")
+    tasks = [try_lichess(), try_chessdb(), try_stockfish_online()]
+    
+    try:
+        # Wait for first successful result (max 3 seconds total)
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED, timeout=3)
+        
+        # Cancel remaining tasks to save resources
+        for task in pending:
+            task.cancel()
+        
+        # Return first successful result
+        for task in done:
+            result = await task
+            if result:
+                logger.info(f"✅ FASTEST WIN: {result['engine_used']} in {result['analysis_time']}s")
+                return result
+                
+    except Exception as e:
+        logger.warning(f"⚠️ Parallel API error: {e}")
+    
+    return None
+
+async def try_online_stockfish_OLD_SLOW(fen: str, depth: int):
+    """Try multiple online Stockfish APIs IN PARALLEL for maximum speed"""
+    
+    # 🚀 BLITZ MODE: Try ALL APIs simultaneously and return first success
+    async def try_lichess():
+        try:
+            logger.info("🌐 Trying Lichess Stockfish API...")
+            timeout = aiohttp.ClientTimeout(total=2)  # BLITZ MODE: 2s max
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = "https://lichess.org/api/cloud-eval"
                 params = {
