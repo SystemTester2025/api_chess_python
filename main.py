@@ -98,6 +98,58 @@ STOCKFISH_PATHS = [
     "stockfish"  # If it's in PATH
 ]
 
+async def download_stockfish_binary():
+    """Download precompiled Stockfish binary for Linux x64"""
+    try:
+        import aiohttp
+        import stat
+        
+        # Stockfish 16 for Linux x64
+        download_url = "https://github.com/official-stockfish/Stockfish/releases/download/sf_16/stockfish-ubuntu-x86-64-avx2.tar"
+        local_path = "/tmp/stockfish_downloaded"
+        
+        logger.error("🔽 Downloading Stockfish binary...")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(download_url, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                if response.status == 200:
+                    # Save the tar file
+                    tar_path = "/tmp/stockfish.tar"
+                    with open(tar_path, 'wb') as f:
+                        async for chunk in response.content.iter_chunked(8192):
+                            f.write(chunk)
+                    
+                    # Extract the tar file
+                    import tarfile
+                    with tarfile.open(tar_path, 'r') as tar:
+                        tar.extractall('/tmp/')
+                    
+                    # Find the stockfish binary in extracted files
+                    import glob
+                    possible_paths = [
+                        "/tmp/stockfish*",
+                        "/tmp/*/stockfish*",
+                        "/tmp/*/*/stockfish*"
+                    ]
+                    
+                    for pattern in possible_paths:
+                        files = glob.glob(pattern)
+                        for file_path in files:
+                            if os.path.isfile(file_path) and 'stockfish' in os.path.basename(file_path).lower():
+                                # Make executable
+                                os.chmod(file_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH)
+                                logger.error(f"✅ Downloaded Stockfish to: {file_path}")
+                                return file_path
+                    
+                    logger.error("❌ Stockfish binary not found in extracted files")
+                    return None
+                else:
+                    logger.error(f"❌ Download failed: HTTP {response.status}")
+                    return None
+    except Exception as e:
+        logger.error(f"❌ Download error: {e}")
+        return None
+
 async def initialize_engines():
     """Initialize available chess engines with NATIVE Stockfish priority"""
     global engines
@@ -109,24 +161,29 @@ async def initialize_engines():
     logger.error("🔧 Forcing NATIVE Stockfish only for real analysis")
     
     if not stockfish_initialized:
-        # Fallback 1: Try native Stockfish
-        logger.info("🔄 Trying native Stockfish...")
+        # 🚨 EMERGENCY: Download Stockfish binary if not found
+        logger.error("🔄 Trying native Stockfish...")
+        
+        # Try to download Stockfish binary
+        stockfish_path = await download_stockfish_binary()
+        if stockfish_path:
+            STOCKFISH_PATHS.insert(0, stockfish_path)
         
         stockfish_found = False
         for path in STOCKFISH_PATHS:
             try:
-                logger.info(f"🔍 Trying Stockfish path: {path}")
+                logger.error(f"🔍 Trying Stockfish path: {path}")
                 if path == "stockfish" or os.path.exists(path):
                     engines["stockfish"] = chess.engine.SimpleEngine.popen_uci(path)
-                    logger.info(f"✅ Native Stockfish initialized at: {path}")
+                    logger.error(f"✅ Native Stockfish initialized at: {path}")
                     stockfish_found = True
                     stockfish_initialized = True
                     break
             except Exception as e:
-                logger.warning(f"⚠️ Failed to initialize Stockfish at {path}: {e}")
+                logger.error(f"⚠️ Failed to initialize Stockfish at {path}: {e}")
         
         if not stockfish_found:
-            logger.warning("⚠️ Native Stockfish failed, using intelligent backup")
+            logger.error("❌ Native Stockfish failed, using intelligent backup")
             engines["stockfish_backup"] = "backup_engine"
     
     # Always ensure we have a working engine, but don't confuse the main engine selector
