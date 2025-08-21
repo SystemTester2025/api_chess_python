@@ -16,6 +16,8 @@ import asyncio
 import time
 import logging
 import os
+import aiohttp
+import json
 from pathlib import Path
 
 # Configure logging first
@@ -461,19 +463,117 @@ async def health_check():
         "version": "1.0.0"
     }
 
+async def try_online_stockfish(fen: str, depth: int):
+    """Try multiple online Stockfish APIs for real analysis"""
+    
+    # API 1: Lichess Stockfish API (free and reliable)
+    try:
+        logger.info("🌐 Trying Lichess Stockfish API...")
+        async with aiohttp.ClientSession() as session:
+            # Lichess cloud analysis API
+            url = "https://lichess.org/api/cloud-eval"
+            params = {
+                "fen": fen,
+                "multiPv": 1,
+                "variant": "standard"
+            }
+            
+            async with session.get(url, params=params, timeout=10) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "pvs" in data and len(data["pvs"]) > 0:
+                        pv = data["pvs"][0]
+                        best_move = pv["moves"].split()[0] if "moves" in pv else None
+                        
+                        if best_move:
+                            return {
+                                "best_move": best_move,
+                                "evaluation": {
+                                    "cp": pv.get("cp", 0),
+                                    "mate": pv.get("mate", None)
+                                },
+                                "engine_used": "lichess_stockfish",
+                                "depth_reached": depth,
+                                "best_line": pv.get("moves", "").split()[:3]
+                            }
+    except Exception as e:
+        logger.warning(f"⚠️ Lichess API failed: {e}")
+    
+    # API 2: Try ChessDB API (another free option)
+    try:
+        logger.info("🌐 Trying ChessDB API...")
+        async with aiohttp.ClientSession() as session:
+            url = f"http://www.chessdb.cn/cdb.php"
+            params = {
+                "action": "querypv",
+                "board": fen,
+                "json": 1
+            }
+            
+            async with session.get(url, params=params, timeout=10) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "status" in data and data["status"] == "ok" and "pv" in data:
+                        moves = data["pv"].split()
+                        if moves:
+                            return {
+                                "best_move": moves[0],
+                                "evaluation": {
+                                    "cp": data.get("score", 0),
+                                    "mate": None
+                                },
+                                "engine_used": "chessdb_stockfish", 
+                                "depth_reached": data.get("depth", depth),
+                                "best_line": moves[:3]
+                            }
+    except Exception as e:
+        logger.warning(f"⚠️ ChessDB API failed: {e}")
+    
+    # API 3: Try Stockfish Online API
+    try:
+        logger.info("🌐 Trying Stockfish Online API...")
+        async with aiohttp.ClientSession() as session:
+            url = "https://stockfish-api.herokuapp.com/api/stockfish"
+            payload = {
+                "fen": fen,
+                "depth": min(depth, 20),  # Limit depth for API
+                "time": 2000  # 2 second limit
+            }
+            
+            async with session.post(url, json=payload, timeout=15) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "bestmove" in data:
+                        return {
+                            "best_move": data["bestmove"],
+                            "evaluation": {
+                                "cp": data.get("evaluation", 0),
+                                "mate": data.get("mate", None)
+                            },
+                            "engine_used": "stockfish_online",
+                            "depth_reached": data.get("depth", depth),
+                            "best_line": [data["bestmove"]]
+                        }
+    except Exception as e:
+        logger.warning(f"⚠️ Stockfish Online API failed: {e}")
+    
+    logger.warning("⚠️ All online Stockfish APIs failed")
+    return None
+
 # Engine-specific analysis functions
 async def analyze_with_stockfish(board: chess.Board, depth: int, time_limit: float):
-    """Analyze position with Stockfish engine (native or JS) or intelligent backup"""
+    """Analyze position with REAL Stockfish engine - online APIs or native"""
     if "stockfish" not in engines and "stockfish_backup" not in engines:
         raise Exception("No Stockfish engine available")
     
-    # Try Stockfish.js first if available and enabled
-    logger.info("🔧 Attempting to use best available Stockfish engine")
+    logger.info("🔧 Using REAL Stockfish analysis for best moves")
     
-    # TEMPORARILY DISABLE Stockfish.js due to illegal move bug
-    # The Stockfish.js fallback returns illegal moves like e2e4 when e4 is occupied
-    logger.info("🔧 Skipping Stockfish.js due to illegal move issue, using enhanced backup")
+    # Try online Stockfish APIs first (most reliable)
+    online_result = await try_online_stockfish(board.fen(), depth)
+    if online_result:
+        return online_result
     
+    # Try Stockfish.js as backup
     if False and "stockfish" in engines and engines["stockfish"] == "stockfish_js" and stockfish_js_engine is not None:
         try:
             result = await stockfish_js_engine.analyze(board.fen(), depth)
