@@ -17,16 +17,17 @@ import time
 import logging
 import os
 from pathlib import Path
+
+# Configure logging first
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 try:
     from stockfish_js import stockfish_js_engine
     logger.info("✅ Stockfish.js module imported successfully")
 except ImportError as e:
     logger.error(f"❌ Failed to import stockfish_js: {e}")
     stockfish_js_engine = None
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Multi-Engine Chess API",
@@ -194,8 +195,11 @@ async def shutdown_event():
             except:
                 pass
 
-@app.options("/{full_path:path}")
-async def options_handler(full_path: str):
+@app.options("/api/v1/best-move")
+@app.options("/api/v1/evaluation")  
+@app.options("/api/v1/ensemble")
+@app.options("/api/v1/engines/status")
+async def options_handler():
     """Handle preflight CORS requests"""
     return {}
 
