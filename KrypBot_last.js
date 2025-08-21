@@ -18,6 +18,82 @@
     let chessBot = { elo: 3200, power: 10, status: 1, nature: 1, type: 1, fen: 0, time: 0.3, human_simulation: false, min_time: 0.5, max_time: 3.0 };  // BLITZ MODE: Lower depth for speed
     let selectedEngine = 'ensemble'; // Try ensemble engine for better moves
 
+    // 📝 ADVANCED LOGGING SYSTEM
+    let debugLogs = [];
+    const MAX_LOGS = 1000; // Keep last 1000 log entries
+    
+    function logToFile(level, message, data = null) {
+        const timestamp = new Date().toISOString();
+        const logEntry = {
+            timestamp,
+            level,
+            message,
+            data: data ? JSON.stringify(data, null, 2) : null,
+            url: window.location.href,
+            fen: fen || 'unknown'
+        };
+        
+        debugLogs.push(logEntry);
+        
+        // Keep only last MAX_LOGS entries
+        if (debugLogs.length > MAX_LOGS) {
+            debugLogs = debugLogs.slice(-MAX_LOGS);
+        }
+        
+        // Also log to console with enhanced formatting
+        const prefix = `🔍 [${level.toUpperCase()}] ${timestamp}`;
+        if (data) {
+            console.log(`${prefix} ${message}`, data);
+        } else {
+            console.log(`${prefix} ${message}`);
+        }
+    }
+    
+    function downloadLogs() {
+        const logContent = debugLogs.map(log => {
+            let line = `[${log.timestamp}] ${log.level.toUpperCase()}: ${log.message}`;
+            if (log.data) {
+                line += `\nDATA: ${log.data}`;
+            }
+            line += `\nURL: ${log.url}`;
+            line += `\nFEN: ${log.fen}`;
+            return line + '\n---\n';
+        }).join('\n');
+        
+        const blob = new Blob([logContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chess-bot-debug-${new Date().toISOString().replace(/[:.]/g, '-')}.log`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        logToFile('INFO', '📥 Debug logs downloaded successfully');
+    }
+    
+    // Override console.log to capture everything
+    const originalLog = console.log;
+    console.log = function(...args) {
+        originalLog.apply(console, args);
+        logToFile('INFO', args.join(' '), args.length > 1 ? args : null);
+    };
+    
+    const originalError = console.error;
+    console.error = function(...args) {
+        originalError.apply(console, args);
+        logToFile('ERROR', args.join(' '), args.length > 1 ? args : null);
+    };
+    
+    const originalWarn = console.warn;
+    console.warn = function(...args) {
+        originalWarn.apply(console, args);
+        logToFile('WARN', args.join(' '), args.length > 1 ? args : null);
+    };
+    
+    logToFile('SYSTEM', '🚀 Chess Bot Debug Logging System Initialized');
+
     // YOUR OWN API URL
     const YOUR_API_URL = 'https://api-chess-python.onrender.com';
     if (!localStorage.getItem('username')) {
@@ -310,7 +386,11 @@
                                 }
                             }
                             catch (e) {
-                                console.log('⚠️ Evaluation fetch failed:', e)
+                                logToFile('ERROR', `⚠️ Evaluation fetch failed: ${e.message}`, {
+                                    error: e.toString(),
+                                    stack: e.stack,
+                                    fen: fen
+                                });
                             }
                         }
 
@@ -323,8 +403,11 @@
                             can_interval = false
                             try {
 
-                                console.log("🎯 Requesting best move with engine:", selectedEngine, "depth:", chessBot.power, "elo:", chessBot.elo);
-                                console.log("📋 Sending position FEN:", fen.substring(0, 30) + "...");
+                                logToFile('API_REQUEST', `🎯 Requesting best move with engine: ${selectedEngine}, depth: ${chessBot.power}, elo: ${chessBot.elo}`);
+                                logToFile('API_REQUEST', `📋 Sending position FEN: ${fen.substring(0, 50)}...`);
+                                logToFile('API_REQUEST', `🌐 API URL: ${YOUR_API_URL}/api/v1/best-move`);
+                                
+                                const requestStartTime = performance.now();
                                 const data = await fetch(`${YOUR_API_URL}/api/v1/best-move`, {
                                     method: "POST",
                                     headers: {
@@ -339,28 +422,32 @@
                                 });
 
                                 if (data.ok) {
+                                    const requestEndTime = performance.now();
+                                    const requestDuration = ((requestEndTime - requestStartTime) / 1000).toFixed(2);
+                                    
                                     const resp = await data.json();
                                     continuation = resp.best_move;
 
                                     // 🔍 DETAILED API RESPONSE LOGGING
-                                    console.log('📤 REQUEST SENT TO API:');
-                                    console.log('   🌐 URL:', `${YOUR_API_URL}/api/v1/best-move`);
-                                    console.log('   📝 FEN:', fen);
-                                    console.log('   🎯 Engine:', selectedEngine);
-                                    console.log('   📊 Depth:', chessBot.power);
-                                    console.log('   🎮 ELO:', chessBot.elo);
+                                    logToFile('API_RESPONSE', `✅ API SUCCESS in ${requestDuration}s`, {
+                                        request_url: `${YOUR_API_URL}/api/v1/best-move`,
+                                        request_fen: fen.substring(0, 50) + '...',
+                                        request_engine: selectedEngine,
+                                        request_depth: chessBot.power,
+                                        request_elo: chessBot.elo,
+                                        response_move: resp.best_move,
+                                        response_engine: resp.engine_used,
+                                        response_evaluation: resp.evaluation,
+                                        response_time: resp.analysis_time,
+                                        response_depth: resp.depth_reached,
+                                        request_duration: requestDuration + 's',
+                                        full_response: resp
+                                    });
 
-                                    console.log('📥 FULL API RESPONSE:');
-                                    console.log('   🎯 Best Move:', resp.best_move);
-                                    console.log('   🔧 Engine Used:', resp.engine_used);
-                                    console.log('   📊 Evaluation:', resp.evaluation);
-                                    console.log('   ⏱️ Analysis Time:', resp.analysis_time + 's');
-                                    console.log('   📈 Depth Reached:', resp.depth_reached);
-                                    console.log('   🧠 Full Response:', resp);
-
-                                    console.log("🎯 Best move received:", continuation);
+                                    logToFile('MOVE', `🎯 Best move received: ${continuation}`);
 
                                     if (continuation) {
+                                        logToFile('MOVE', `✅ Creating arrow for move: ${continuation}`);
                                         create_div(continuation);
                                     }
                                 } else {
@@ -374,7 +461,13 @@
 
 
                             catch (e) {
-                                console.log("an error has cocured" + e); can_interval = true
+                                logToFile('ERROR', `💥 Main API request failed: ${e.message}`, {
+                                    error: e.toString(),
+                                    stack: e.stack,
+                                    fen: fen,
+                                    engine: selectedEngine
+                                });
+                                can_interval = true
 
                             }
 
@@ -427,7 +520,7 @@
                                     const evaluation = resp.evaluation || {};
                                     const cp = evaluation.cp || 0;
                                     const mate = evaluation.mate;
-                                    
+
                                     // Calculate winning chances from centipawn evaluation
                                     let winning_chances = 50; // Default neutral
                                     if (mate !== null) {
@@ -437,11 +530,11 @@
                                         winning_chances = 50 + (cp * 0.04); // ~25cp = +1% chance
                                         winning_chances = Math.max(5, Math.min(95, winning_chances));
                                     }
-                                    
+
                                     // Position evaluation
                                     let positionText = "Balanced";
                                     let positionColor = "#ffff00"; // Yellow for balanced
-                                    
+
                                     if (mate !== null) {
                                         positionText = mate > 0 ? `Mate in ${mate}` : `Mated in ${Math.abs(mate)}`;
                                         positionColor = mate > 0 ? "#00ff00" : "#ff0000";
@@ -458,11 +551,11 @@
                                         positionText = "Worse";
                                         positionColor = "#FFA500";
                                     }
-                                    
+
                                     // Move quality evaluation
                                     let moveText = "Good Move";
                                     let moveColor = "#90EE90";
-                                    
+
                                     if (mate !== null && mate > 0) {
                                         moveText = "Best Move!";
                                         moveColor = "#00ff00";
@@ -482,7 +575,7 @@
                                         moveText = "Mistake";
                                         moveColor = "#ff0000";
                                     }
-                                    
+
                                     // Update UI
                                     $('#evalPosition').text(positionText);
                                     $('#evalPosition').css({ "color": positionColor });
@@ -494,7 +587,11 @@
                                 }
                             }
                             catch (e) {
-                                console.log('⚠️ Opponent evaluation fetch failed:', e)
+                                logToFile('ERROR', `⚠️ Opponent evaluation fetch failed: ${e.message}`, {
+                                    error: e.toString(),
+                                    stack: e.stack,
+                                    fen: fen
+                                });
                             }
                         }
 
@@ -600,6 +697,16 @@
       <option value="rapid">🕐 Rapid (Depth 15, ~3-5s)</option>
       <option value="classical">🏛️ Classical (Depth 18, ~5-10s)</option>
     </select>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 6px;">
+    <p style="font-size: 20px; font-weight: 600; letter-spacing: 0.04em;">Debug Tools 🔧</p>
+    <button id="downloadLogsBtn" style="padding: 10px; border-radius: 4px; background: #4CAF50; color: white; border: none; cursor: pointer; font-weight: bold;">
+      📥 Download Debug Logs
+    </button>
+    <div style="font-size: 12px; color: #888; margin-top: 4px;">
+      Captures all console output, API calls, and errors for debugging
+    </div>
   </section>
 
   <section style="display: flex; flex-direction: column; gap: 6px;">
@@ -749,15 +856,21 @@
                 const speed = this.value;
                 if (speed === 'blitz') {
                     chessBot.power = 10;  // Fast moves for 3-min games
-                    console.log('⚡ BLITZ MODE: Depth 10 for fast moves');
+                    logToFile('CONFIG', '⚡ BLITZ MODE: Depth 10 for fast moves');
                 } else if (speed === 'rapid') {
                     chessBot.power = 15;  // Balanced for 10-min games
-                    console.log('🕐 RAPID MODE: Depth 15 for balanced play');
+                    logToFile('CONFIG', '🕐 RAPID MODE: Depth 15 for balanced play');
                 } else if (speed === 'classical') {
                     chessBot.power = 18;  // Deep analysis for 30+ min games
-                    console.log('🏛️ CLASSICAL MODE: Depth 18 for best moves');
+                    logToFile('CONFIG', '🏛️ CLASSICAL MODE: Depth 18 for best moves');
                 }
-                console.log('Speed mode changed to:', speed, 'depth:', chessBot.power);
+                logToFile('CONFIG', `Speed mode changed to: ${speed}, depth: ${chessBot.power}`);
+            })
+
+            // Download logs button handler
+            $("#downloadLogsBtn").on('click', function () {
+                logToFile('USER_ACTION', '🔧 User requested debug log download');
+                downloadLogs();
             })
 
             //changing the color
