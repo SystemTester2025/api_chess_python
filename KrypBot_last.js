@@ -14,8 +14,8 @@
 (function () {
     'use strict';
     let interval, show_opponent = false, can_interval = true, main_interval = true, show_evaluation = true,
-        auto_move, current_color = '#000000', fen, checkfen, cp = 0, best_cp = 0, hint = false, username, Messages = [], msgLen = 0;
-    let chessBot = { elo: 3200, power: 15, status: 0, nature: 1, type: 1, fen: 0, time: 0.3, human_simulation: false, min_time: 0.5, max_time: 3.0 };
+        auto_move, current_color = '#000000', fen, checkfen, cp = 0, best_cp = 0, hint = true, username, Messages = [], msgLen = 0;  // Start with hints enabled
+    let chessBot = { elo: 3200, power: 15, status: 1, nature: 1, type: 1, fen: 0, time: 0.3, human_simulation: false, min_time: 0.5, max_time: 3.0 };  // Start with bot enabled
     let selectedEngine = 'stockfish'; // Engine selection
 
     // YOUR OWN API URL
@@ -62,7 +62,7 @@
                 const turn = board.game.getTurn() === board.game.getPlayingAs()
                 const elm = document.createElement('div')
                 elm.setAttribute('class', `highlight square-${num} myhigh`)
-                const jelm = $(elm).css({ 'opacity': '0', 'border': `4px solid ${current_color}`, 'background': 'rgba(15, 10, 222,0.4)', 'shadow': '0 0 10px rgba(3, 201, 169,0.8)', 'border-radius': '50%' })
+                const jelm = $(elm).css({ 'opacity': '0.8', 'border': `4px solid ${current_color}`, 'background': 'rgba(15, 10, 222,0.4)', 'shadow': '0 0 10px rgba(3, 201, 169,0.8)', 'border-radius': '50%' })
                 $('#board-play-computer').append(jelm)
 
                 $('#board-single').append(jelm)
@@ -183,11 +183,12 @@
 
             const create_div = (str1) => {
                 try {
+                    console.log('🎯 Creating arrow for move:', str1);
                     const target = $('chess-board')[0] || $('wc-chess-board')[0];
 
                     const a = get_number(str1[0])
                     const b = get_number(str1[2])
-                    console.log(str1.substring(0, 2), str1.substring(2, 4))
+                    console.log('🎯 Move squares:', str1.substring(0, 2), str1.substring(2, 4))
                     if (auto_move) {
                         auto_move_piece(str1.substring(0, 2), str1.substring(2, 4), $('chess-board')[0] || $('wc-chess-board')[0])
                     }
@@ -196,9 +197,10 @@
                     const last_element = create_elm(b + str1[3])
 
                     if (target) {
+                        console.log('🎯 Found board target, creating SVG arrow');
                         $(target).append(`
 
-        <svg width="100%" height="100%" class='myhigh' style="position: absolute; top: 0; left: 0;">
+        <svg width="100%" height="100%" class='myhigh' style="position: absolute; top: 0; left: 0; z-index: 100;">
           <defs>
             <marker id="arrowhead" markerWidth="12" markerHeight="10"
                     refX="10" refY="3.5" orient="auto">
@@ -210,6 +212,9 @@
         </svg>
 
     `);
+                        console.log('🎯 Arrow created successfully');
+                    } else {
+                        console.log('❌ No board target found for arrow');
                     }
 
 
@@ -248,15 +253,24 @@
                         return;
                     }
 
-                                    const len = $('.myhigh').length
-const opp_len = $('hishigh').length
-const my_peice_num = board.game.getPlayingAs()
-const my_peice = my_peice_num === 1 ? 'white' : 'black'  // Convert number to string
-const turn = board.game.getTurn()
-fen = board.game.getFEN()
-chessBot.fen = board.game.getFEN()
+                                        const len = $('.myhigh').length
+                    const opp_len = $('hishigh').length
+                    const my_peice_num = board.game.getPlayingAs()
+                    const my_peice = my_peice_num === 1 ? 'white' : 'black'  // Convert number to string
+                    const turn = board.game.getTurn()
+                    fen = board.game.getFEN()
+                    chessBot.fen = board.game.getFEN()
 
-console.log('🎮 Player info:', {my_peice_num, my_peice, turn, fen: fen.substring(0, 20) + '...'})
+                    console.log('🎮 Player info:', { my_peice_num, my_peice, turn, fen: fen.substring(0, 20) + '...' })
+
+                    // Return early if board state is not ready
+                    if (my_peice_num === undefined || turn === undefined) {
+                        console.log('⚠️ Board state not ready yet');
+                        main_interval = true;
+                        return;
+                    }
+
+                    console.log('🔧 Bot status:', { hint, can_interval, len });
 
 
                     if (board.game.getTurn() == board.game.getPlayingAs()) {
@@ -266,15 +280,15 @@ console.log('🎮 Player info:', {my_peice_num, my_peice, turn, fen: fen.substri
                             console.log("am right there")
                             try {
                                 checkfen = fen;
-                                console.log('📡 Sending evaluation request:', {fen: fen.substring(0, 20) + '...', perspective: my_peice});
-                            const data = await fetch(`${YOUR_API_URL}/api/v1/evaluation`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    fen: fen,
-                                    perspective: my_peice
-                                })
-                            });
+                                console.log('📡 Sending evaluation request:', { fen: fen.substring(0, 20) + '...', perspective: my_peice });
+                                const data = await fetch(`${YOUR_API_URL}/api/v1/evaluation`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        fen: fen,
+                                        perspective: my_peice
+                                    })
+                                });
 
                                 if (data.ok) {
                                     const resp = await data.json();
@@ -344,7 +358,7 @@ console.log('🎮 Player info:', {my_peice_num, my_peice, turn, fen: fen.substri
 
                             checkfen = fen;
                             try {
-                                console.log('📡 Opponent evaluation request:', {fen: fen.substring(0, 20) + '...', perspective: my_peice});
+                                console.log('📡 Opponent evaluation request:', { fen: fen.substring(0, 20) + '...', perspective: my_peice });
                                 const data = await fetch(`${YOUR_API_URL}/api/v1/evaluation`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
@@ -416,8 +430,8 @@ console.log('🎮 Player info:', {my_peice_num, my_peice, turn, fen: fen.substri
   <section style="display: flex; flex-direction: column; gap: 6px;">
     <p style="font-size: 20px; font-weight: 600; letter-spacing: 0.04em;">Chess Bot Status</p>
     <div style="display: flex; gap: 18px;">
-      <label><input value='1' type='radio' name='bot-status'> On</label>
-      <label><input checked value='0' type='radio' name='bot-status'> Off</label>
+      <label><input checked value='1' type='radio' name='bot-status'> On</label>
+      <label><input value='0' type='radio' name='bot-status'> Off</label>
     </div>
   </section>
 
