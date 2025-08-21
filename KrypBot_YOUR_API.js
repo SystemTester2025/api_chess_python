@@ -297,6 +297,12 @@
 
 
                 const board = $('chess-board')[0] || $('wc-chess-board')[0];
+                
+                // Check if board and game exist
+                if (!board || !board.game) {
+                    console.log('⚠️ Board not ready yet');
+                    return;
+                }
 
                 const len = $('.myhigh').length
                 const opp_len = $('hishigh').length
@@ -305,17 +311,25 @@
                 fen = board.game.getFEN()
                 if (board.game.getTurn() === board.game.getPlayingAs()) {
                     if (fen !== checkfen) {
-                        const data = await fetch(`${YOUR_API_URL}/api/v1/evaluation`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                fen: fen,
-                                perspective: my_peice
+                        try {
+                            const data = await fetch(`${YOUR_API_URL}/api/v1/evaluation`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    fen: fen,
+                                    perspective: my_peice
+                                })
                             })
-                        })
 
-                        const resp = await data.json()
-                        best_cp = resp.evaluation?.cp || 0
+                            if (data.ok) {
+                                const resp = await data.json()
+                                best_cp = resp.evaluation?.cp || 0
+                            } else {
+                                console.log('⚠️ Evaluation API error:', data.status);
+                            }
+                        } catch (error) {
+                            console.log('⚠️ Evaluation fetch failed:', error);
+                        }
                         checkfen = fen
 
                     }
@@ -325,25 +339,35 @@
                         console.log(elo, power)
 
                         console.log('🎯 Requesting best move with engine:', selectedEngine, 'depth:', power, 'elo:', elo);
-                        const data = await fetch(`${YOUR_API_URL}/api/v1/best-move`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                fen: fen,
-                                depth: power,
-                                elo_limit: elo,
-                                engine: selectedEngine
-                            })
-                        }).then((res) => res.json()).then((resp) => {
+                        
+                        try {
+                            const data = await fetch(`${YOUR_API_URL}/api/v1/best-move`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    fen: fen,
+                                    depth: power,
+                                    elo_limit: elo,
+                                    engine: selectedEngine
+                                })
+                            });
 
-                            continuation = resp.best_move
-                            console.log('✅ API Response:', resp)
-                            console.log('🎯 Best move received:', continuation)
-                            if (!$('.myhigh').length) {
-                                create_div(continuation)
+                            if (data.ok) {
+                                const resp = await data.json();
+                                continuation = resp.best_move
+                                console.log('✅ API Response:', resp)
+                                console.log('🎯 Best move received:', continuation)
+                                if (!$('.myhigh').length && continuation) {
+                                    create_div(continuation)
+                                }
+                            } else {
+                                console.log('❌ Best move API error:', data.status);
                             }
-                            can_interval = true
-                        })
+                        } catch (error) {
+                            console.log('❌ Best move fetch failed:', error);
+                        }
+                        
+                        can_interval = true
 
 
 
@@ -353,22 +377,29 @@
                 else {
                     if (fen !== checkfen) {
                         console.log(best_cp)
-                        fetch(`${YOUR_API_URL}/api/v1/evaluation`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                fen: fen,
-                                perspective: my_peice
-                            })
-                        }).then((resp) => resp.json()).then((resp) => {
-                            cp = resp.evaluation?.cp || 0
-                            $('#evalPosition').text(resp.winning_chances > 50 ? 'Winning' : 'Losing')
-                            $('#evalMove').text(resp.move_quality?.last_move || 'Unknown')
-                            $('#evalMove').css({ "color": resp.winning_chances > 50 ? '#00ff00' : '#ff0000' })
+                        
+                        try {
+                            const resp = await fetch(`${YOUR_API_URL}/api/v1/evaluation`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    fen: fen,
+                                    perspective: my_peice
+                                })
+                            });
 
-                        })
-
-
+                            if (resp.ok) {
+                                const data = await resp.json();
+                                cp = data.evaluation?.cp || 0
+                                $('#evalPosition').text(data.winning_chances > 50 ? 'Winning' : 'Losing')
+                                $('#evalMove').text(data.move_quality?.last_move || 'Unknown')
+                                $('#evalMove').css({ "color": data.winning_chances > 50 ? '#00ff00' : '#ff0000' })
+                            } else {
+                                console.log('⚠️ Opponent evaluation API error:', resp.status);
+                            }
+                        } catch (error) {
+                            console.log('⚠️ Opponent evaluation fetch failed:', error);
+                        }
 
                         checkfen = fen
 
@@ -664,7 +695,10 @@
                 if (this.checked) { $('#messageBox').css({ 'display': 'block' }) } else { $('#messageBox').css({ 'display': 'none' }) }
             })
 
-            interval = setInterval(() => { if (can_interval) { get_hint() } }, 300)
+            // Give the board more time to load before starting
+            setTimeout(() => {
+                interval = setInterval(() => { if (can_interval) { get_hint() } }, 500)
+            }, 2000)
 
             // Initialize player timer
             setTimeout(() => {
