@@ -808,6 +808,47 @@ async def analyze_with_stockfish(board: chess.Board, depth: int, time_limit: flo
     if "stockfish" not in engines and "stockfish_backup" not in engines:
         raise Exception("No Stockfish engine available")
     
+    logger.error("🚨 EMERGENCY MODE: Bypassing online APIs - using local Stockfish ONLY")
+    logger.error(f"🔧 Engines available: {list(engines.keys())}")
+    logger.error(f"🔧 Stockfish engine type: {type(engines.get('stockfish', 'NOT_FOUND'))}")
+    
+    # 🚨 EMERGENCY: Try local Stockfish FIRST (skip online APIs completely)
+    if "stockfish" in engines and engines["stockfish"] != "unavailable" and hasattr(engines["stockfish"], 'analyse'):
+        try:
+            logger.error("🚨 EMERGENCY: Using local chess.engine Stockfish...")
+            engine = engines["stockfish"]
+            info = await asyncio.wait_for(
+                engine.analyse(board, chess.engine.Limit(depth=min(depth, 12), time=3.0)),
+                timeout=5.0
+            )
+            
+            best_move = str(info["pv"][0]) if info.get("pv") else None
+            if not best_move:
+                raise Exception("No best move found")
+            
+            logger.error(f"✅ LOCAL STOCKFISH SUCCESS: {best_move}")
+            
+            # Extract evaluation
+            score = info.get("score", chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE))
+            if score.is_mate():
+                evaluation = {"cp": None, "mate": score.mate()}
+            else:
+                evaluation = {"cp": score.cp, "mate": None}
+            
+            # Extract principal variation
+            pv = [str(move) for move in info.get("pv", [])[:3]]
+            
+            return {
+                "best_move": best_move,
+                "evaluation": evaluation,
+                "engine_used": "stockfish_local_EMERGENCY_BYPASS",
+                "depth_reached": min(depth, 12),
+                "best_line": pv
+            }
+        except Exception as e:
+            logger.error(f"❌ Local Stockfish EMERGENCY failed: {e}")
+            logger.error(f"❌ Exception type: {type(e)}")
+    
     logger.info("🔧 Using REAL Stockfish analysis for best moves")
     
     # Try online Stockfish APIs first (most reliable)
