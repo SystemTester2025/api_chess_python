@@ -470,8 +470,11 @@ async def analyze_with_stockfish(board: chess.Board, depth: int, time_limit: flo
     # Try Stockfish.js first if available and enabled
     logger.info("🔧 Attempting to use best available Stockfish engine")
     
-    # Try Stockfish.js first if available
-    if "stockfish" in engines and engines["stockfish"] == "stockfish_js" and stockfish_js_engine is not None:
+    # TEMPORARILY DISABLE Stockfish.js due to illegal move bug
+    # The Stockfish.js fallback returns illegal moves like e2e4 when e4 is occupied
+    logger.info("🔧 Skipping Stockfish.js due to illegal move issue, using enhanced backup")
+    
+    if False and "stockfish" in engines and engines["stockfish"] == "stockfish_js" and stockfish_js_engine is not None:
         try:
             result = await stockfish_js_engine.analyze(board.fen(), depth)
             if result and 'bestmove' in result:
