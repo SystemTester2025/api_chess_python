@@ -576,8 +576,18 @@ async def analyze_with_backup(board: chess.Board):
     }
 
 def select_smart_move(board, legal_moves):
-    """Select move based on chess principles"""
+    """Select move based on chess principles - IMPROVED to avoid blunders"""
     import random
+    
+    # Material values for smart captures
+    piece_values = {
+        chess.PAWN: 100,
+        chess.KNIGHT: 300,
+        chess.BISHOP: 300,
+        chess.ROOK: 500,
+        chess.QUEEN: 900,
+        chess.KING: 10000
+    }
     
     # Priority scoring
     scores = {}
@@ -585,33 +595,60 @@ def select_smart_move(board, legal_moves):
     for move in legal_moves:
         score = 0
         
-        # Check if it's a capture
+        # SMART CAPTURE EVALUATION - avoid sacrifices!
         if board.is_capture(move):
-            score += 100
+            captured_piece = board.piece_at(move.to_square)
+            moving_piece = board.piece_at(move.from_square)
             
-        # Check if it gives check
+            if captured_piece and moving_piece:
+                # Only capture if we gain material or equal trade
+                material_gain = piece_values[captured_piece.piece_type] - piece_values[moving_piece.piece_type]
+                if material_gain >= 0:
+                    score += material_gain // 10  # Good capture
+                else:
+                    score -= 200  # BAD SACRIFICE - heavily penalize
+        
+        # Check if it gives check (but not if it sacrifices material)
         board.push(move)
         if board.is_check():
-            score += 50
+            # Only bonus for check if we're not sacrificing
+            if not board.is_capture(move) or score >= 0:
+                score += 30
         board.pop()
         
-        # Prefer center squares
+        # Prefer center squares in opening/middlegame
         to_square = move.to_square
         file = chess.square_file(to_square)
         rank = chess.square_rank(to_square)
         
         # Center bonus (e4, e5, d4, d5)
         if file in [3, 4] and rank in [3, 4]:
-            score += 30
+            score += 20
         
-        # Avoid edge moves in opening
-        if rank == 0 or rank == 7 or file == 0 or file == 7:
-            score -= 10
+        # Develop pieces (knights and bishops)
+        moving_piece = board.piece_at(move.from_square)
+        if moving_piece and moving_piece.piece_type in [chess.KNIGHT, chess.BISHOP]:
+            # Bonus for developing from back rank
+            from_rank = chess.square_rank(move.from_square)
+            if (moving_piece.color == chess.WHITE and from_rank == 0) or \
+               (moving_piece.color == chess.BLACK and from_rank == 7):
+                score += 25
+        
+        # Avoid hanging pieces in obvious spots
+        if file == 0 or file == 7 or rank == 0 or rank == 7:
+            score -= 5
             
-        scores[move] = score + random.randint(1, 10)  # Small random factor
+        scores[move] = score + random.randint(1, 5)  # Smaller random factor
     
-    # Return move with highest score
-    return max(scores.keys(), key=lambda m: scores[m])
+    # Filter out obviously bad moves (big negative scores)
+    good_moves = {move: score for move, score in scores.items() if score > -100}
+    
+    if good_moves:
+        # Return move with highest score from good moves
+        return max(good_moves.keys(), key=lambda m: good_moves[m])
+    else:
+        # If all moves are bad, pick least bad
+        return max(scores.keys(), key=lambda m: scores[m])
 
 def evaluate_position(board):
     """Basic position evaluation"""
