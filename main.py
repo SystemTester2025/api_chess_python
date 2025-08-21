@@ -496,7 +496,7 @@ async def try_online_stockfish(fen: str, depth: int):
     for attempt in range(3):  # Retry up to 3 times
         try:
             logger.info(f"🌐 Trying Lichess Stockfish API (attempt {attempt + 1}/3)...")
-            timeout = aiohttp.ClientTimeout(total=8)  # Shorter timeout
+            timeout = aiohttp.ClientTimeout(total=3)  # BLITZ MODE: 3s max
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = "https://lichess.org/api/cloud-eval"
                 params = {
@@ -528,13 +528,13 @@ async def try_online_stockfish(fen: str, depth: int):
                                     }
         except Exception as e:
             logger.warning(f"⚠️ Lichess API attempt {attempt + 1} failed: {e}")
-            if attempt < 2:  # Wait before retry
-                await asyncio.sleep(0.5)
+            if attempt < 2:  # Wait before retry (shorter for blitz)
+                await asyncio.sleep(0.2)
     
     # API 2: Chess.com API (try cloud analysis)
     try:
         logger.info("🌐 Trying Chess.com analysis API...")
-        timeout = aiohttp.ClientTimeout(total=6)
+        timeout = aiohttp.ClientTimeout(total=2)  # BLITZ MODE: 2s max
         async with aiohttp.ClientSession(timeout=timeout) as session:
             # Chess.com has a different endpoint structure
             url = "https://www.chess.com/callback/analysis"
@@ -567,7 +567,7 @@ async def try_online_stockfish(fen: str, depth: int):
     # API 3: ChessDB API (reliable fallback)
     try:
         logger.info("🌐 Trying ChessDB API...")
-        timeout = aiohttp.ClientTimeout(total=6)
+        timeout = aiohttp.ClientTimeout(total=2)  # BLITZ MODE: 2s max
         async with aiohttp.ClientSession(timeout=timeout) as session:
             url = "http://www.chessdb.cn/cdb.php"
             params = {
@@ -602,12 +602,12 @@ async def try_online_stockfish(fen: str, depth: int):
     # API 4: Stockfish.online (another option)
     try:
         logger.info("🌐 Trying Stockfish.online API...")
-        timeout = aiohttp.ClientTimeout(total=8)
+        timeout = aiohttp.ClientTimeout(total=3)  # BLITZ MODE: 3s max
         async with aiohttp.ClientSession(timeout=timeout) as session:
             url = "https://stockfish.online/api/s/v2.php"
             params = {
                 "fen": fen,
-                "depth": min(depth, 18),
+                "depth": min(depth, 12),  # BLITZ MODE: Lower depth for speed
                 "mode": "bestmove"
             }
             

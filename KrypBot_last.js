@@ -15,7 +15,7 @@
     'use strict';
     let interval, show_opponent = false, can_interval = true, main_interval = true, show_evaluation = true,
         auto_move, current_color = '#000000', fen, checkfen, cp = 0, best_cp = 0, hint = true, username, Messages = [], msgLen = 0;  // Start with hints enabled
-    let chessBot = { elo: 3200, power: 15, status: 1, nature: 1, type: 1, fen: 0, time: 0.3, human_simulation: false, min_time: 0.5, max_time: 3.0 };  // Start with bot enabled
+    let chessBot = { elo: 3200, power: 10, status: 1, nature: 1, type: 1, fen: 0, time: 0.3, human_simulation: false, min_time: 0.5, max_time: 3.0 };  // BLITZ MODE: Lower depth for speed
     let selectedEngine = 'ensemble'; // Try ensemble engine for better moves
 
     // YOUR OWN API URL
@@ -532,6 +532,15 @@
   </section>
 
   <section style="display: flex; flex-direction: column; gap: 6px;">
+    <p style="font-size: 20px; font-weight: 600; letter-spacing: 0.04em;">Speed Mode ⚡</p>
+    <select id="speedSelect" style="padding: 8px; border-radius: 4px; background: #2a2a2a; color: #f0e68c; border: 1px solid #444;">
+      <option value="blitz" selected>⚡ Blitz (Depth 10, ~1-2s)</option>
+      <option value="rapid">🕐 Rapid (Depth 15, ~3-5s)</option>
+      <option value="classical">🏛️ Classical (Depth 18, ~5-10s)</option>
+    </select>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 6px;">
     <p style="font-size: 20px; font-weight: 600; letter-spacing: 0.04em;">Move Mode</p>
     <div style="display: flex; gap: 18px;">
       <label><input value='1' type='radio' name='move-mode'> Human Simulation</label>
@@ -671,6 +680,22 @@
             $("#engineSelect").on('change', function () {
                 selectedEngine = this.value;
                 console.log('Selected engine:', selectedEngine);
+            })
+
+            // Speed mode handler
+            $("#speedSelect").on('change', function () {
+                const speed = this.value;
+                if (speed === 'blitz') {
+                    chessBot.power = 10;  // Fast moves for 3-min games
+                    console.log('⚡ BLITZ MODE: Depth 10 for fast moves');
+                } else if (speed === 'rapid') {
+                    chessBot.power = 15;  // Balanced for 10-min games
+                    console.log('🕐 RAPID MODE: Depth 15 for balanced play');
+                } else if (speed === 'classical') {
+                    chessBot.power = 18;  // Deep analysis for 30+ min games
+                    console.log('🏛️ CLASSICAL MODE: Depth 18 for best moves');
+                }
+                console.log('Speed mode changed to:', speed, 'depth:', chessBot.power);
             })
 
             //changing the color
