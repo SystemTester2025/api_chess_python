@@ -457,8 +457,12 @@ async def analyze_with_stockfish(board: chess.Board, depth: int, time_limit: flo
     if "stockfish" not in engines and "stockfish_backup" not in engines:
         raise Exception("No Stockfish engine available")
     
-    # Try Stockfish.js first
-    if "stockfish" in engines and engines["stockfish"] == "stockfish_js" and stockfish_js_engine is not None:
+    # TEMPORARILY DISABLE Stockfish.js due to incorrect move suggestions
+    # Use intelligent backup engine instead which provides correct moves
+    logger.info("🔧 Using intelligent backup engine for better accuracy")
+    
+    # Try Stockfish.js first (DISABLED)
+    if False and "stockfish" in engines and engines["stockfish"] == "stockfish_js" and stockfish_js_engine is not None:
         try:
             result = await stockfish_js_engine.analyze(board.fen(), depth)
             if result and 'bestmove' in result:
