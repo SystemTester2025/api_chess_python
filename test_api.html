@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chess API Tester</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .response { background: #f5f5f5; padding: 10px; border-radius: 5px; margin-top: 10px; white-space: pre-wrap; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .error { background: #ffebee; border-left: 4px solid #f44336; }
+        .success { background: #e8f5e8; border-left: 4px solid #4caf50; }
+    </style>
+</head>
+<body>
+    <h1>🚀 Chess API Debugger</h1>
+    <p>This will help us debug why you're getting random moves!</p>
+
+    <div class="test-section">
+        <h3>1. Check API Status</h3>
+        <button onclick="checkAPIStatus()">Check API Health</button>
+        <div id="status-response" class="response"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. Check Engine Status</h3>
+        <button onclick="checkEngines()">Check Available Engines</button>
+        <div id="engines-response" class="response"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. Test Best Move (Stockfish)</h3>
+        <button onclick="testStockfish()">Request Best Move with Stockfish</button>
+        <div id="stockfish-response" class="response"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>4. Test Best Move (Random Engine)</h3>
+        <button onclick="testRandom()">Request Best Move with Random Engine</button>
+        <div id="random-response" class="response"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>5. Test Multiple Requests</h3>
+        <button onclick="testMultiple()">Test 3 Requests in a Row</button>
+        <div id="multiple-response" class="response"></div>
+    </div>
+
+    <script>
+        const API_URL = 'https://api-chess-python.onrender.com';
+        const TEST_FEN = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1'; // Position after 1.e4
+
+        function displayResponse(elementId, response, isError = false) {
+            const element = document.getElementById(elementId);
+            element.textContent = JSON.stringify(response, null, 2);
+            element.className = `response ${isError ? 'error' : 'success'}`;
+        }
+
+        async function checkAPIStatus() {
+            try {
+                console.log('🔍 Checking API status...');
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                console.log('✅ API Status:', data);
+                displayResponse('status-response', data);
+            } catch (error) {
+                console.error('❌ API Status Error:', error);
+                displayResponse('status-response', { error: error.message }, true);
+            }
+        }
+
+        async function checkEngines() {
+            try {
+                console.log('🔍 Checking engine status...');
+                const response = await fetch(`${API_URL}/api/v1/engines/status`);
+                const data = await response.json();
+                console.log('✅ Engine Status:', data);
+                displayResponse('engines-response', data);
+            } catch (error) {
+                console.error('❌ Engine Status Error:', error);
+                displayResponse('engines-response', { error: error.message }, true);
+            }
+        }
+
+        async function testStockfish() {
+            try {
+                console.log('🔍 Testing Stockfish engine...');
+                const requestData = {
+                    fen: TEST_FEN,
+                    depth: 12,
+                    engine: 'stockfish',
+                    elo_limit: 3200
+                };
+                
+                console.log('📤 Sending request:', requestData);
+                
+                const response = await fetch(`${API_URL}/api/v1/best-move`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const data = await response.json();
+                console.log('✅ Stockfish Response:', data);
+                
+                // Analyze the response
+                const analysis = {
+                    request: requestData,
+                    response: data,
+                    analysis: {
+                        engine_used: data.engine_used,
+                        move_looks_good: data.best_move && data.best_move.length === 4,
+                        evaluation_present: !!data.evaluation,
+                        likely_quality: data.best_move === 'e7e5' ? 'GOOD (common response to e4)' : 'UNKNOWN - check if logical'
+                    }
+                };
+                
+                displayResponse('stockfish-response', analysis);
+            } catch (error) {
+                console.error('❌ Stockfish Test Error:', error);
+                displayResponse('stockfish-response', { error: error.message }, true);
+            }
+        }
+
+        async function testRandom() {
+            try {
+                console.log('🔍 Testing Random engine...');
+                const requestData = {
+                    fen: TEST_FEN,
+                    depth: 5,
+                    engine: 'random',
+                    elo_limit: 1200
+                };
+                
+                const response = await fetch(`${API_URL}/api/v1/best-move`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const data = await response.json();
+                console.log('✅ Random Response:', data);
+                displayResponse('random-response', { request: requestData, response: data });
+            } catch (error) {
+                console.error('❌ Random Test Error:', error);
+                displayResponse('random-response', { error: error.message }, true);
+            }
+        }
+
+        async function testMultiple() {
+            try {
+                console.log('🔍 Testing multiple requests...');
+                const results = [];
+                
+                for (let i = 0; i < 3; i++) {
+                    console.log(`📤 Request ${i + 1}/3...`);
+                    const response = await fetch(`${API_URL}/api/v1/best-move`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            fen: TEST_FEN,
+                            depth: 10,
+                            engine: 'stockfish',
+                            elo_limit: 3200
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    results.push({
+                        request_number: i + 1,
+                        best_move: data.best_move,
+                        engine_used: data.engine_used,
+                        evaluation: data.evaluation
+                    });
+                    
+                    // Small delay between requests
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+                
+                const analysis = {
+                    results: results,
+                    consistency_check: {
+                        all_same_move: results.every(r => r.best_move === results[0].best_move),
+                        all_stockfish: results.every(r => r.engine_used === 'stockfish'),
+                        moves: results.map(r => r.best_move)
+                    }
+                };
+                
+                console.log('✅ Multiple Requests:', analysis);
+                displayResponse('multiple-response', analysis);
+            } catch (error) {
+                console.error('❌ Multiple Test Error:', error);
+                displayResponse('multiple-response', { error: error.message }, true);
+            }
+        }
+
+        // Auto-run basic checks on load
+        window.onload = function() {
+            console.log('🚀 Chess API Debugger loaded');
+            console.log('📋 Run tests to debug your API');
+        };
+    </script>
+</body>
+</html>
