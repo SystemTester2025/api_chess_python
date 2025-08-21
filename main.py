@@ -463,6 +463,32 @@ async def health_check():
         "version": "1.0.0"
     }
 
+def clean_move_format(raw_move: str) -> str:
+    """Clean move format from various APIs to standard notation"""
+    if not raw_move:
+        return ""
+    
+    # Handle "bestmove c7c6 ponder d5c4" format
+    if raw_move.startswith("bestmove "):
+        parts = raw_move.split()
+        if len(parts) >= 2:
+            move = parts[1]  # Extract "c7c6" from "bestmove c7c6 ponder d5c4"
+            logger.info(f"🧹 Cleaned Stockfish format: '{raw_move}' → '{move}'")
+            return move
+    
+    # Handle other formats or clean moves
+    raw_move = raw_move.strip()
+    
+    # Basic validation: should be 4-5 characters like "e2e4" or "e7e8q"
+    if len(raw_move) >= 4 and len(raw_move) <= 5:
+        # Check if it looks like a valid move (two squares)
+        if (raw_move[0].isalpha() and raw_move[1].isdigit() and 
+            raw_move[2].isalpha() and raw_move[3].isdigit()):
+            return raw_move
+    
+    logger.warning(f"⚠️ Invalid move format: '{raw_move}'")
+    return ""
+
 async def try_online_stockfish(fen: str, depth: int):
     """Try multiple online Stockfish APIs with improved reliability"""
     
@@ -484,20 +510,22 @@ async def try_online_stockfish(fen: str, depth: int):
                         data = await response.json()
                         if "pvs" in data and len(data["pvs"]) > 0:
                             pv = data["pvs"][0]
-                            best_move = pv["moves"].split()[0] if "moves" in pv else None
+                            raw_move = pv["moves"].split()[0] if "moves" in pv else None
                             
-                            if best_move:
-                                logger.info("✅ Lichess API success!")
-                                return {
-                                    "best_move": best_move,
-                                    "evaluation": {
-                                        "cp": pv.get("cp", 0),
-                                        "mate": pv.get("mate", None)
-                                    },
-                                    "engine_used": "lichess_stockfish",
-                                    "depth_reached": depth,
-                                    "best_line": pv.get("moves", "").split()[:3]
-                                }
+                            if raw_move:
+                                clean_move = clean_move_format(raw_move)
+                                if clean_move:
+                                    logger.info(f"✅ Lichess API success! Move: '{clean_move}'")
+                                    return {
+                                        "best_move": clean_move,
+                                        "evaluation": {
+                                            "cp": pv.get("cp", 0),
+                                            "mate": pv.get("mate", None)
+                                        },
+                                        "engine_used": "lichess_stockfish",
+                                        "depth_reached": depth,
+                                        "best_line": pv.get("moves", "").split()[:3]
+                                    }
         except Exception as e:
             logger.warning(f"⚠️ Lichess API attempt {attempt + 1} failed: {e}")
             if attempt < 2:  # Wait before retry
@@ -519,17 +547,20 @@ async def try_online_stockfish(fen: str, depth: int):
                 if response.status == 200:
                     data = await response.json()
                     if "best" in data and data["best"]:
-                        logger.info("✅ Chess.com API success!")
-                        return {
-                            "best_move": data["best"],
-                            "evaluation": {
-                                "cp": data.get("eval", 0),
-                                "mate": data.get("mate", None)
-                            },
-                            "engine_used": "chess_com_stockfish",
-                            "depth_reached": depth,
-                            "best_line": [data["best"]]
-                        }
+                        raw_move = data["best"]
+                        clean_move = clean_move_format(raw_move)
+                        if clean_move:
+                            logger.info(f"✅ Chess.com API success! Move: '{clean_move}'")
+                            return {
+                                "best_move": clean_move,
+                                "evaluation": {
+                                    "cp": data.get("eval", 0),
+                                    "mate": data.get("mate", None)
+                                },
+                                "engine_used": "chess_com_stockfish",
+                                "depth_reached": depth,
+                                "best_line": [clean_move]
+                            }
     except Exception as e:
         logger.warning(f"⚠️ Chess.com API failed: {e}")
     
@@ -551,17 +582,20 @@ async def try_online_stockfish(fen: str, depth: int):
                     if "status" in data and data["status"] == "ok" and "pv" in data:
                         moves = data["pv"].split()
                         if moves:
-                            logger.info("✅ ChessDB API success!")
-                            return {
-                                "best_move": moves[0],
-                                "evaluation": {
-                                    "cp": data.get("score", 0),
-                                    "mate": None
-                                },
-                                "engine_used": "chessdb_stockfish", 
-                                "depth_reached": data.get("depth", depth),
-                                "best_line": moves[:3]
-                            }
+                            raw_move = moves[0]
+                            clean_move = clean_move_format(raw_move)
+                            if clean_move:
+                                logger.info(f"✅ ChessDB API success! Move: '{clean_move}'")
+                                return {
+                                    "best_move": clean_move,
+                                    "evaluation": {
+                                        "cp": data.get("score", 0),
+                                        "mate": None
+                                    },
+                                    "engine_used": "chessdb_stockfish", 
+                                    "depth_reached": data.get("depth", depth),
+                                    "best_line": moves[:3]
+                                }
     except Exception as e:
         logger.warning(f"⚠️ ChessDB API failed: {e}")
     
@@ -581,17 +615,22 @@ async def try_online_stockfish(fen: str, depth: int):
                 if response.status == 200:
                     data = await response.json()
                     if "bestmove" in data and data["bestmove"]:
-                        logger.info("✅ Stockfish.online API success!")
-                        return {
-                            "best_move": data["bestmove"],
-                            "evaluation": {
-                                "cp": data.get("evaluation", 0),
-                                "mate": data.get("mate", None)
-                            },
-                            "engine_used": "stockfish_online",
-                            "depth_reached": data.get("depth", depth),
-                            "best_line": [data["bestmove"]]
-                        }
+                        # Clean the move format: "bestmove c7c6 ponder d5c4" → "c7c6"
+                        raw_move = data["bestmove"]
+                        clean_move = clean_move_format(raw_move)
+                        
+                        if clean_move:
+                            logger.info(f"✅ Stockfish.online API success! Raw: '{raw_move}' → Clean: '{clean_move}'")
+                            return {
+                                "best_move": clean_move,
+                                "evaluation": {
+                                    "cp": data.get("evaluation", 0),
+                                    "mate": data.get("mate", None)
+                                },
+                                "engine_used": "stockfish_online",
+                                "depth_reached": data.get("depth", depth),
+                                "best_line": [clean_move]
+                            }
     except Exception as e:
         logger.warning(f"⚠️ Stockfish.online API failed: {e}")
     
