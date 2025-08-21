@@ -17,7 +17,12 @@ import time
 import logging
 import os
 from pathlib import Path
-from stockfish_js import stockfish_js_engine
+try:
+    from stockfish_js import stockfish_js_engine
+    logger.info("✅ Stockfish.js module imported successfully")
+except ImportError as e:
+    logger.error(f"❌ Failed to import stockfish_js: {e}")
+    stockfish_js_engine = None
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -93,16 +98,28 @@ async def initialize_engines():
     """Initialize available chess engines with Stockfish.js priority"""
     global engines
     
-    # First, try to initialize Stockfish.js
-    logger.info("🚀 Initializing Stockfish.js...")
-    stockfish_js_ready = await stockfish_js_engine.initialize()
+    stockfish_initialized = False
     
-    if stockfish_js_ready:
-        engines["stockfish"] = "stockfish_js"
-        logger.info("✅ Stockfish.js engine ready!")
+    # First, try to initialize Stockfish.js if available
+    if stockfish_js_engine is not None:
+        logger.info("🚀 Initializing Stockfish.js...")
+        try:
+            stockfish_js_ready = await stockfish_js_engine.initialize()
+            
+            if stockfish_js_ready:
+                engines["stockfish"] = "stockfish_js"
+                logger.info("✅ Stockfish.js engine ready!")
+                stockfish_initialized = True
+            else:
+                logger.warning("⚠️ Stockfish.js initialization failed")
+        except Exception as e:
+            logger.error(f"❌ Stockfish.js initialization error: {e}")
     else:
+        logger.warning("⚠️ Stockfish.js module not available")
+    
+    if not stockfish_initialized:
         # Fallback 1: Try native Stockfish
-        logger.info("🔄 Stockfish.js failed, trying native Stockfish...")
+        logger.info("🔄 Trying native Stockfish...")
         
         stockfish_found = False
         for path in STOCKFISH_PATHS:
@@ -112,6 +129,7 @@ async def initialize_engines():
                     engines["stockfish"] = chess.engine.SimpleEngine.popen_uci(path)
                     logger.info(f"✅ Native Stockfish initialized at: {path}")
                     stockfish_found = True
+                    stockfish_initialized = True
                     break
             except Exception as e:
                 logger.warning(f"⚠️ Failed to initialize Stockfish at {path}: {e}")
@@ -120,7 +138,12 @@ async def initialize_engines():
             logger.warning("⚠️ Native Stockfish failed, using intelligent backup")
             engines["stockfish_backup"] = "backup_engine"
     
-    # Random engine (always available)
+    # Always ensure we have a working engine
+    if not stockfish_initialized and "stockfish_backup" not in engines:
+        logger.info("🔧 Setting up intelligent backup engine as primary")
+        engines["stockfish"] = "intelligent_backup"
+    
+    # Random engine (always available) 
     engines["random"] = "random_engine"
     logger.info("✅ Random engine initialized")
     
@@ -424,7 +447,7 @@ async def analyze_with_stockfish(board: chess.Board, depth: int, time_limit: flo
         raise Exception("No Stockfish engine available")
     
     # Try Stockfish.js first
-    if "stockfish" in engines and engines["stockfish"] == "stockfish_js":
+    if "stockfish" in engines and engines["stockfish"] == "stockfish_js" and stockfish_js_engine is not None:
         try:
             result = await stockfish_js_engine.analyze(board.fen(), depth)
             if result and 'bestmove' in result:
@@ -439,7 +462,7 @@ async def analyze_with_stockfish(board: chess.Board, depth: int, time_limit: flo
             logger.warning(f"⚠️ Stockfish.js failed: {e}, using backup")
     
     # Try native Stockfish
-    if "stockfish" in engines and engines["stockfish"] != "stockfish_js":
+    if "stockfish" in engines and engines["stockfish"] not in ["stockfish_js", "intelligent_backup"]:
         try:
             engine = engines["stockfish"]
             info = await asyncio.wait_for(
@@ -471,7 +494,7 @@ async def analyze_with_stockfish(board: chess.Board, depth: int, time_limit: flo
         except Exception as e:
             logger.warning(f"⚠️ Native Stockfish failed: {e}, using backup")
     
-    # Fallback to intelligent backup engine
+    # Use intelligent backup engine (either as primary or fallback)
     return await analyze_with_backup(board)
 
 async def analyze_with_backup(board: chess.Board):
